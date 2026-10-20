@@ -76,8 +76,11 @@ separate **Amplifier-macOS-upgrade-qualification** artifact. This contains a
 signed/notarized `0.0.0` build `0` fixture and a signed loopback feed whose update
 is byte-identical to the release ZIP. Install the fixture in an isolated test
 folder, serve its `feed` directory on `127.0.0.1:49340` only after checking port
-ownership, and exercise the real updater. The installed candidate must resolve
-the production feed afterward. Preserve checksums and results, then stop the owned
+ownership, and launch the fixture with argument-only
+`-SUFeedURL http://127.0.0.1:49340/appcast.xml -SUEnableAutomaticChecks NO`.
+Exercise the real updater. Quit and relaunch the installed candidate without
+those arguments and verify it resolves the production feed. The signed bundles
+retain the production HTTPS feed throughout. Preserve checksums and results, then stop the owned
 listener and remove the fixture. Never publish that artifact as an installer.
 
 The workflow validates the tag/version and that its commit belongs to main,

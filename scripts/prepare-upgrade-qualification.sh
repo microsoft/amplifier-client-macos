@@ -21,8 +21,9 @@ from pathlib import Path
 app = Path('upgrade-qualification/baseline/Amplifier.app')
 path = app / 'Contents/Info.plist'
 info = plistlib.loads(path.read_bytes())
+# Keep the bundle's production HTTPS feed so AppUpdater initializes normally.
+# Sparkle's loopback feed override is passed only at test launch, never persisted.
 info.update(CFBundleShortVersionString='0.0.0', CFBundleVersion='0',
-            SUFeedURL='http://127.0.0.1:49340/appcast.xml',
             SUEnableAutomaticChecks=False, SUAutomaticallyUpdate=False)
 path.write_bytes(plistlib.dumps(info))
 path = app / 'Contents/Resources/BUILD-INFO.json'
