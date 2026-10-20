@@ -23,7 +23,8 @@ below. Do not describe this early preview as comprehensive platform acceptance.
 - [x] Qualify signed update between two builds of the new app identity using an
       isolated test channel, then verify the exact public feed configuration.
 - [x] Review public docs, artwork attribution and privacy.
-- [ ] Verify anonymous release downloads and the published feed after publication.
+- [x] Verify anonymous release downloads and the published feed after publication:
+      all five assets match the qualified candidate checksums.
 
 ## Remaining preview acceptance
 
