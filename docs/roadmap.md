@@ -1,5 +1,10 @@
 # Roadmap
 
+Direction comes from [the vision](VISION.md) and [contracts](../contracts/README.md).
+[MAC1–5](contract-assessment.md#gap-derived-work) names current preview evidence gaps.
+Future slices below need their own boundary and acceptance work before implementation.
+Shared Windows alignment uses DC/DJ in Unified; it does not depend on Mac frameworks.
+
 ## Initial public preview
 
 Ship the native menu-bar client, quick composer, notifications and optional Tempo

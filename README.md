@@ -64,6 +64,9 @@ interaction, and the optional Tempo companion. Native integration belongs to the
 Mac client; conversation execution remains with the connected host. Read the
 [product vision](docs/VISION.md), [architecture](docs/architecture.md), and
 [roadmap](docs/roadmap.md) for the distinction between current behavior and plans.
+The [contract index](contracts/README.md) connects platform promises to the shared
+desktop journeys, [compatibility record](docs/compatibility.md), and
+[evidence/gap assessment](docs/contract-assessment.md).
 
 ## Build and contribute
 
