@@ -3,6 +3,7 @@
 .build/
 .swiftpm/
 dist/
+upgrade-qualification/
 *.xcuserstate
 .env
 .env.*
