@@ -4,7 +4,12 @@ import PackageDescription
 let package = Package(
     name: "AmplifierMac", platforms: [.macOS(.v13)],
     products: [.executable(name: "Amplifier", targets: ["AmplifierApp"])],
-    dependencies: [.package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.0")],
+    dependencies: [
+        .package(
+            url: "https://github.com/sparkle-project/Sparkle",
+            exact: "2.10.0"
+        )
+    ],
     targets: [
         .target(name: "ClientCore"),
         .executableTarget(name: "AmplifierApp", dependencies: ["ClientCore", .product(name: "Sparkle", package: "Sparkle", condition: .when(platforms: [.macOS]))],

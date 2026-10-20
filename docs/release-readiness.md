@@ -1,19 +1,21 @@
 # Initial public release readiness
 
-Status: local public-source preparation. Repository provisioning and public release
-setup remain with the owner. Do not advertise a download until its artifacts exist
-and the matching release is qualified.
+Status: public source initialized and development builds verified. Signed release
+qualification remains pending. Do not advertise a download until its artifacts
+exist and the matching release is qualified.
 
 ## Before first publication
 
-- [ ] Owner creates `microsoft/amplifier-client-macos` through the required process.
-- [ ] Reconcile the prepared source with the new repository's required templates,
-      contributor/security guidance, ownership and policies; preserve its bootstrap history.
+- [x] Owner creates `microsoft/amplifier-client-macos` through the required process.
+- [x] Initialize fresh source with canonical Microsoft templates, contributor/security
+      guidance, maintainer-team ownership and default-branch protections.
+- [x] Configure protected signing/public-release environments, a team release-review
+      gate, read-only default workflow permissions and a disabled publication switch.
 - [ ] Confirm release signing ownership and install credentials only through the
       approved GitHub environments. No personal credentials are copied in source.
-- [ ] Configure the public Sparkle key, protected signing/public-release environments,
-      branch/tag controls and publication switch described in releasing.md.
-- [ ] Pass hosted core, native, universal build and release-tooling checks.
+- [ ] Configure the public Sparkle key and credentials, verify release tag controls,
+      and enable publication only after qualification as described in releasing.md.
+- [x] Pass hosted core, native, universal build and release-tooling checks.
 - [ ] Sign/notarize/staple the exact candidate app and DMG; validate Gatekeeper.
 - [ ] Fresh install: connect, revoke, reconnect, notification permission, actual
       notification icon, Reply and terminated-app Reply, saved-message recovery.
@@ -29,6 +31,13 @@ and the matching release is qualified.
 - [ ] Review public docs/artwork attribution and verify an anonymous download.
 
 ## Evidence discipline
+
+The initial source passed the GitHub macOS build with Xcode 26.3 and a separate
+isolated Mac build with Xcode 27.1: 27 core tests, native checks, 11 publication
+tests, universal compilation and development app/DMG/ZIP packaging. These builds
+used ad-hoc signing; they do not qualify a Developer ID installer or signed updates.
+Repository configuration was prepared against the Microsoft repository-audit
+recipe; this is not a claim that the full recipe has been run.
 
 Record exact source commit, artifact checksums, versions, platform, tested flows
 and limits. Earlier component evidence informs the work; the new name, identity,
