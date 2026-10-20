@@ -1,6 +1,24 @@
-# Amplifier for Mac interaction contract
+# Amplifier for Mac interaction guide
 
-Amplifier for Mac follows the shared [client experience contract](https://github.com/microsoft/amplifier-unified/blob/main/contracts/client-experience.v1.md), including CX8: UX is like golf. Minimize the strokes to achieve a result without overwhelming the interface.
+Platform implementation detail under [MP](../contracts/mac-experience.v1.md) and
+[MR](../contracts/mac-connection-release.v1.md), preserving the approved interaction
+requirements previously collected here. Shared rules are owned by the
+[reviewed Unified contracts](compatibility.md), including CX8: minimize interaction
+cost without overwhelming the interface. This guide explains the Mac treatment;
+it does not define Windows controls or a second host protocol.
+
+| Detail below | Governing clauses |
+| --- | --- |
+| Direct choices, native materials, settings | MP1/2; CX6/8 |
+| Attention and work | MP3; DC1/2/3/5 |
+| Floating notice layout and acceptance | MP1/4; DC3, DJ4/7 |
+| Opening Amplifier | MP5; DC4 |
+| Login startup | MR5; DC5 |
+| Connection approval and updates | MR1/4/6; shared native pairing |
+| Recovery and connection controls | MR2/3; DC6, CS1/4 |
+
+The [assessment](contract-assessment.md) records checks and gaps. A detailed
+requirement or acceptance checklist here is not a statement that it has passed.
 
 Tempo is the optional desktop companion. Application settings, connections,
 notifications and updates belong to Amplifier. Hiding Tempo preserves those

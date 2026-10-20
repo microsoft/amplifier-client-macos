@@ -1,5 +1,10 @@
 # Architecture
 
+Shared promises and reviewed API references are indexed in
+[compatibility](compatibility.md); platform obligations are in
+[MP/MR](../contracts/README.md). This document describes implementation choices,
+not a separate authority for attention, permissions or recovery.
+
 ## Current client
 
 The root Swift package has two targets. `ClientCore` owns endpoint validation,

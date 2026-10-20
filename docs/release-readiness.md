@@ -4,6 +4,10 @@ Status: the initial preview's signed distribution and new app identity are
 qualified. Broader interaction and hardware coverage remains explicitly tracked
 below. Do not describe this early preview as comprehensive platform acceptance.
 
+The [clause assessment](contract-assessment.md) maps this evidence and its gaps
+to MP/MR and shared DJ1–DJ7. The [compatibility record](compatibility.md) distinguishes
+the reviewed contracts from the synthetic host lineage and unqualified version floor.
+
 ## Initial preview distribution gate
 
 - [x] Owner creates `microsoft/amplifier-client-macos` through the required process.
