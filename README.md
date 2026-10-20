@@ -3,14 +3,14 @@
 A native Mac client for Amplifier, with quick chat, desktop notifications and
 **Tempo**, an optional floating companion that keeps your work within reach.
 
-**Public preview in preparation.** The current app connects to an existing
+**Early public preview.** The current app connects to an existing
 Amplifier Unified host. Its full workspace opens in your browser or installed
 web app. An integrated workspace window and optional device capabilities are
 planned, not included in this preview.
 
 ## Install
 
-When available, download `Amplifier-macOS.dmg` from
+Download `Amplifier-macOS.dmg` from
 [Releases](https://github.com/microsoft/amplifier-client-macos/releases).
 Official releases are Developer ID signed and Apple notarized. Development
 workflow artifacts are for testing and are not qualified public installers.
