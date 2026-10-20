@@ -1,0 +1,118 @@
+name: Signed release
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag on main (for example v0.1.0)
+        required: true
+        type: string
+      publish:
+        description: Publish after qualification and public-release environment approval
+        default: false
+        type: boolean
+permissions:
+  contents: read
+concurrency:
+  group: macos-release
+  cancel-in-progress: false
+jobs:
+  source:
+    if: github.repository == 'microsoft/amplifier-client-macos' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      revision: ${{ steps.check.outputs.revision }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate tagged source
+        id: check
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          python3 - <<'PY'
+          import os, re, subprocess, plistlib
+          tag = os.environ['RELEASE_TAG']
+          if not re.fullmatch(r'v\d+\.\d+\.\d+', tag):
+              raise SystemExit('Choose an existing stable version tag.')
+          revision = subprocess.check_output(['git', 'rev-parse', '--verify', f'refs/tags/{tag}^{{commit}}'], text=True).strip()
+          subprocess.run(['git', 'merge-base', '--is-ancestor', revision, 'origin/main'], check=True)
+          info = plistlib.loads(subprocess.check_output(['git', 'show', revision + ':Info.plist']))
+          if tag != 'v' + info['CFBundleShortVersionString']:
+              raise SystemExit('Tag and app version differ.')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('revision=' + revision + '\n')
+          PY
+  build:
+    needs: source
+    runs-on: macos-15
+    environment: signing
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.source.outputs.revision }}
+          persist-credentials: false
+      - name: Check release tooling
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
+      - name: Select the macOS 26 SDK
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app
+      - name: Prepare Developer ID signing
+        env:
+          AMPLIFIER_CERTIFICATE_P12: ${{ secrets.AMPLIFIER_CERTIFICATE_P12 }}
+          AMPLIFIER_CERTIFICATE_PASSWORD: ${{ secrets.AMPLIFIER_CERTIFICATE_PASSWORD }}
+          AMPLIFIER_SIGNING_IDENTITY: ${{ vars.AMPLIFIER_SIGNING_IDENTITY }}
+          AMPLIFIER_NOTARY_KEY_P8: ${{ secrets.AMPLIFIER_NOTARY_KEY_P8 }}
+          AMPLIFIER_NOTARY_KEY_ID: ${{ vars.AMPLIFIER_NOTARY_KEY_ID }}
+          AMPLIFIER_NOTARY_ISSUER_ID: ${{ vars.AMPLIFIER_NOTARY_ISSUER_ID }}
+        run: python3 scripts/ci-signing.py
+      - name: Test, build, sign and notarize
+        env:
+          AMPLIFIER_SIGNING_IDENTITY: ${{ vars.AMPLIFIER_SIGNING_IDENTITY }}
+          AMPLIFIER_UPDATE_FEED_URL: https://github.com/microsoft/amplifier-client-macos/releases/latest/download/appcast.xml
+          AMPLIFIER_UPDATE_PUBLIC_KEY: ${{ vars.AMPLIFIER_UPDATE_PUBLIC_KEY }}
+        run: bash build-app.sh
+      - name: Generate and verify signed update feed
+        env:
+          AMPLIFIER_UPDATE_FEED_URL: https://github.com/microsoft/amplifier-client-macos/releases/latest/download/appcast.xml
+          AMPLIFIER_UPDATE_PUBLIC_KEY: ${{ vars.AMPLIFIER_UPDATE_PUBLIC_KEY }}
+          AMPLIFIER_UPDATE_DOWNLOAD_PREFIX: https://github.com/microsoft/amplifier-client-macos/releases/download/${{ inputs.tag }}/
+          AMPLIFIER_SPARKLE_PRIVATE_KEY: ${{ secrets.AMPLIFIER_SPARKLE_PRIVATE_KEY }}
+        run: bash scripts/generate-appcast.sh
+      - name: Remove temporary signing credentials
+        if: always()
+        run: python3 scripts/ci-signing.py cleanup
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Amplifier-macOS-signed
+          path: |
+            dist/Amplifier-macOS.dmg
+            dist/Amplifier-macOS.zip
+            dist/SHA256SUMS
+            dist/BUILD-INFO.json
+            dist/appcast.xml
+          if-no-files-found: error
+  publish:
+    if: inputs.publish && vars.AMPLIFIER_PUBLIC_RELEASES == 'true'
+    needs: [source, build]
+    runs-on: ubuntu-latest
+    environment: public-release
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.source.outputs.revision }}
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: Amplifier-macOS-signed
+          path: release-assets
+      - name: Publish qualified app and signed update feed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          SOURCE_REVISION: ${{ needs.source.outputs.revision }}
+        run: python3 scripts/publish-public.py release-assets RELEASE_NOTES.md

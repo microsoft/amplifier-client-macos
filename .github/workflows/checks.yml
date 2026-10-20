@@ -1,0 +1,31 @@
+name: macOS checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Check release tooling
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
+      - name: Select the macOS 26 SDK
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app
+      - name: Test and build universal development app
+        run: bash build-app.sh
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Amplifier-macOS-development
+          path: |
+            dist/Amplifier-macOS.dmg
+            dist/Amplifier-macOS.zip
+            dist/SHA256SUMS
+            dist/BUILD-INFO.json
+          if-no-files-found: error

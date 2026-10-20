@@ -1,0 +1,13 @@
+# Native build outputs and local IDE state
+.DS_Store
+.build/
+.swiftpm/
+dist/
+*.xcuserstate
+.env
+.env.*
+__pycache__/
+*.pyc
+*.p12
+*.p8
+*.keychain-db

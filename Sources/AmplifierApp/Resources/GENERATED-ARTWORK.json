@@ -1,0 +1,106 @@
+{
+  "mode": "built-in image_gen",
+  "prompts": {
+    "accord": "Create a production-ready transparent PNG desktop-avatar asset extracted and refined from the reference design 05 Accord, bottom middle: three staggered upright crystal organ-pipe blocks, central tallest, cohesive compact stepped sculpture. One sculpture only, straight-on three-quarter presentation exactly like that reference item. Preserve its recognizable silhouette and glossy faceted clear/white glass. Lights and saturated reflections must be electric BLUE and CYAN ONLY for runtime palette remapping. Preserve neutral clear glass facets. No face, no limbs, no eyes, no text, no labels, no other candidates, no ground plane or floor, no cast shadow, no background gradient, no opaque rectangle: genuine transparent alpha background. Single centered sculpture occupying 80% of width and 82% height inside a square image, all extremities in frame. Beautiful premium optical glass, small-scale readable silhouette. Not a sheet or collage.",
+    "meter": "Create a production-ready transparent PNG desktop-avatar asset extracted and refined from the reference design 04 Meter, bottom left: compact upright rectangular crystal prism with three stacked diagonal luminous bands like an equalizer. One sculpture only, straight-on three-quarter presentation exactly like that reference item. Preserve its recognizable silhouette and glossy faceted clear/white glass. Lights and saturated reflections must be electric BLUE and CYAN ONLY for runtime palette remapping. Preserve neutral clear glass facets. No face, no limbs, no eyes, no text, no labels, no other candidates, no ground plane or floor, no cast shadow, no background gradient, no opaque rectangle: genuine transparent alpha background. Single centered sculpture occupying 80% of width and 82% height inside a square image, all extremities in frame. Beautiful premium optical glass, small-scale readable silhouette. Not a sheet or collage.",
+    "chord": "Create a production-ready transparent PNG desktop-avatar asset extracted and refined from the reference design 03 Chord, top right: three upright unequal crystal towers with flowing curved glass ribbons smoothly joining their bases. One sculpture only, straight-on three-quarter presentation exactly like that reference item. Preserve its recognizable silhouette and glossy faceted clear/white glass. Lights and saturated reflections must be electric BLUE and CYAN ONLY for runtime palette remapping. Preserve neutral clear glass facets. No face, no limbs, no eyes, no text, no labels, no other candidates, no ground plane or floor, no cast shadow, no background gradient, no opaque rectangle: genuine transparent alpha background. Single centered sculpture occupying 80% of width and 82% height inside a square image, all extremities in frame. Beautiful premium optical glass, small-scale readable silhouette. Not a sheet or collage."
+  },
+  "darkGlass": {
+    "mode": "built-in image_gen",
+    "motion": "Native floating motion with Reduce Motion support",
+    "prompts": {
+      "relay": "Use case: background-extraction. Production transparent PNG desktop-avatar asset. Reference image is the original approved DARK GLASS concept board. Extract and refine ONE sculpture only: bottom row Relay: compact triangular knot of three broad straight faceted prisms, small triangular opening, same chirality. Use BLUE column as exact shape/material reference. Dark obsidian/smoked charcoal glass, faceted black and dark graphite body with narrow neutral silver edge highlights and electric blue/cyan internal luminous channels, as in the reference. Keep silhouette, proportions, viewpoint and identity. Center the single sculpture in a square transparent canvas with consistent 12% clear padding around it. Object occupies about 76% of canvas. Genuine transparent alpha everywhere outside the sculpture INCLUDING its central hole where applicable. No backdrop, no checkerboard painted in, no floor/reflection or cast shadow, no external halo, no text or labels, no frame, no grid or other objects, no eyes/face/limbs. Preserve the DARK body, don't turn it into clear white glass. Only BLUE and CYAN saturated lights for runtime color remapping. The output is one isolated ready-to-use asset, not a concept board.",
+      "accord": "Use case: background-extraction. Production transparent PNG desktop-avatar asset. Reference image is the original approved DARK GLASS concept board. Extract and refine ONE sculpture only: middle row Accord: compact three staggered upright polygonal glass organ-pipe blocks, center tallest. Use BLUE column as exact shape/material reference. Dark obsidian/smoked charcoal glass, faceted black and dark graphite body with narrow neutral silver edge highlights and electric blue/cyan internal luminous channels, as in the reference. Keep silhouette, proportions, viewpoint and identity. Center the single sculpture in a square transparent canvas with consistent 12% clear padding around it. Object occupies about 76% of canvas. Genuine transparent alpha everywhere outside the sculpture INCLUDING its central hole where applicable. No backdrop, no checkerboard painted in, no floor/reflection or cast shadow, no external halo, no text or labels, no frame, no grid or other objects, no eyes/face/limbs. Preserve the DARK body, don't turn it into clear white glass. Only BLUE and CYAN saturated lights for runtime color remapping. The output is one isolated ready-to-use asset, not a concept board.",
+      "meter": "Use case: background-extraction. Production transparent PNG desktop-avatar asset. Reference image is the original approved DARK GLASS concept board. Extract and refine ONE sculpture only: top row Meter: upright rectangular faceted prism with three diagonal luminous bands. Use BLUE column as exact shape/material reference. Dark obsidian/smoked charcoal glass, faceted black and dark graphite body with narrow neutral silver edge highlights and electric blue/cyan internal luminous channels, as in the reference. Keep silhouette, proportions, viewpoint and identity. Center the single sculpture in a square transparent canvas with consistent 12% clear padding around it. Object occupies about 76% of canvas. Genuine transparent alpha everywhere outside the sculpture INCLUDING its central hole where applicable. No backdrop, no checkerboard painted in, no floor/reflection or cast shadow, no external halo, no text or labels, no frame, no grid or other objects, no eyes/face/limbs. Preserve the DARK body, don't turn it into clear white glass. Only BLUE and CYAN saturated lights for runtime color remapping. The output is one isolated ready-to-use asset, not a concept board.",
+      "arc": "Use case: background-extraction. Production transparent PNG desktop-avatar asset. Reference image is the original approved DARK GLASS concept board. Extract and refine ONE sculpture only: bottom row Arc: rounded triangular continuous flowing glass swirl around circular central opening. Use BLUE column as exact shape/material reference. Dark obsidian/smoked charcoal glass, faceted black and dark graphite body with narrow neutral silver edge highlights and electric blue/cyan internal luminous channels, as in the reference. Keep silhouette, proportions, viewpoint and identity. Center the single sculpture in a square transparent canvas with consistent 12% clear padding around it. Object occupies about 76% of canvas. Genuine transparent alpha everywhere outside the sculpture INCLUDING its central hole where applicable. No backdrop, no checkerboard painted in, no floor/reflection or cast shadow, no external halo, no text or labels, no frame, no grid or other objects, no eyes/face/limbs. Preserve the DARK body, don't turn it into clear white glass. Only BLUE and CYAN saturated lights for runtime color remapping. The output is one isolated ready-to-use asset, not a concept board.",
+      "chord": "Use case: background-extraction. Production transparent PNG desktop-avatar asset. Reference image is the original approved DARK GLASS concept board. Extract and refine ONE sculpture only: top row Chord: three staggered glass towers joined by sweeping flowing ribbons along base. Use BLUE column as exact shape/material reference. Dark obsidian/smoked charcoal glass, faceted black and dark graphite body with narrow neutral silver edge highlights and electric blue/cyan internal luminous channels, as in the reference. Keep silhouette, proportions, viewpoint and identity. Center the single sculpture in a square transparent canvas with consistent 12% clear padding around it. Object occupies about 76% of canvas. Genuine transparent alpha everywhere outside the sculpture INCLUDING its central hole where applicable. No backdrop, no checkerboard painted in, no floor/reflection or cast shadow, no external halo, no text or labels, no frame, no grid or other objects, no eyes/face/limbs. Preserve the DARK body, don't turn it into clear white glass. Only BLUE and CYAN saturated lights for runtime color remapping. The output is one isolated ready-to-use asset, not a concept board.",
+      "crest": "Use case: background-extraction. Production transparent PNG desktop-avatar asset. Reference image is the original approved DARK GLASS concept board. Extract and refine ONE sculpture only: middle row Crest: upright curling single ocean-wave/crescent, curled upper tip and smaller lower curl. Use BLUE column as exact shape/material reference. Dark obsidian/smoked charcoal glass, faceted black and dark graphite body with narrow neutral silver edge highlights and electric blue/cyan internal luminous channels, as in the reference. Keep silhouette, proportions, viewpoint and identity. Center the single sculpture in a square transparent canvas with consistent 12% clear padding around it. Object occupies about 76% of canvas. Genuine transparent alpha everywhere outside the sculpture INCLUDING its central hole where applicable. No backdrop, no checkerboard painted in, no floor/reflection or cast shadow, no external halo, no text or labels, no frame, no grid or other objects, no eyes/face/limbs. Preserve the DARK body, don't turn it into clear white glass. Only BLUE and CYAN saturated lights for runtime color remapping. The output is one isolated ready-to-use asset, not a concept board."
+    },
+    "assets": [
+      {
+        "name": "relay",
+        "size": [
+          1254,
+          1254
+        ],
+        "visibleAlphaBounds": [
+          126,
+          136,
+          1158,
+          1103
+        ],
+        "sha256": "209b9ac9db8887e2e7d3117a0e0efe0ce88d2f395c747571396f623ee55848fa"
+      },
+      {
+        "name": "accord",
+        "size": [
+          1254,
+          1254
+        ],
+        "visibleAlphaBounds": [
+          274,
+          97,
+          1059,
+          1204
+        ],
+        "sha256": "ae6faceb93fc60a89cde19d96cbce05c1d7f78d9cc0483c7255e9292aee44be6"
+      },
+      {
+        "name": "meter",
+        "size": [
+          1254,
+          1254
+        ],
+        "visibleAlphaBounds": [
+          265,
+          116,
+          985,
+          1139
+        ],
+        "sha256": "1abcbe8aa7a25cc1806788753f2c05317d92efed90e7d191056e0de7815629b8"
+      },
+      {
+        "name": "arc",
+        "size": [
+          1254,
+          1254
+        ],
+        "visibleAlphaBounds": [
+          92,
+          88,
+          1172,
+          1146
+        ],
+        "sha256": "b35cd75d55c97c291246f4633cf8872d6db00f3d21c7719bec0ba7b2e35c8585"
+      },
+      {
+        "name": "chord",
+        "size": [
+          1254,
+          1254
+        ],
+        "visibleAlphaBounds": [
+          202,
+          112,
+          1146,
+          1153
+        ],
+        "sha256": "117b961812753eba0fdda0ffc877be9140f6b60aec4332a63ced44720306901a"
+      },
+      {
+        "name": "crest",
+        "size": [
+          1254,
+          1254
+        ],
+        "visibleAlphaBounds": [
+          142,
+          92,
+          1112,
+          1176
+        ],
+        "sha256": "3f058e796658e633d9321310faa5592ad172e307a18dac42597eff44c9f90f06"
+      }
+    ]
+  }
+}

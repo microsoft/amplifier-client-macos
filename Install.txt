@@ -1,0 +1,26 @@
+Amplifier for Mac
+
+1. Drag Amplifier.app to Applications.
+2. Eject the Amplifier for Mac disk image.
+3. Open Amplifier from Applications.
+4. Enter your Amplifier host address, choose Connect in browser, and approve
+   this Mac after comparing the code shown in the application.
+
+You need an existing compatible Amplifier Unified host. Ask its owner for the
+HTTPS address and sign-in access. Installing this app does not install a server.
+
+This preview lives in the menu bar. Tempo is its optional desktop companion;
+choose Hide Tempo if you only want the menu bar and notifications. The full
+workspace opens in your browser or installed web app.
+
+Requires macOS 13 or later. Liquid Glass is available on macOS 26 or later.
+Official releases are signed and notarized. Check for Updates uses signed
+updates; automatic checks are optional. No GitHub account is needed to download.
+
+Help and downloads:
+https://github.com/microsoft/amplifier-client-macos
+
+To uninstall: disable Open Amplifier at login, revoke access through Manage
+connected devices if desired, Forget the credential, quit Amplifier and remove
+Amplifier.app. Saved messages and preferences remain on your Mac. See the
+repository's connection and privacy guide for details.
