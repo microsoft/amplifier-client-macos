@@ -14,6 +14,15 @@ Requires an existing compatible Amplifier Unified host and macOS 13 or later.
 The full workspace currently opens in a browser or installed web app. An
 integrated workspace window, browser control and native voice are not included.
 
-This file describes the candidate. Public artifacts must pass the recorded
-release-readiness gates before publication; source preparation is not release
-qualification.
+Signed with the approved maintainer Developer ID and notarized by Apple.
+Installation is drag-to-Applications; no GitHub account is required.
+
+Qualification covered the universal build, native checks, browser-approved
+connection, quick-chat delivery to a synthetic host, notification icon,
+disconnect/resume, device revocation and a real signed update preserving settings.
+Runtime installation/update checks used Apple silicon on macOS 27.0.1.
+
+This is an early preview. Physical Intel, the full accessibility/multiple-display
+matrix, and fresh end-to-end terminated-app Reply and PWA-navigation checks remain
+follow-up qualification. Existing component tests and earlier behavior checks
+are useful evidence, not substitutes for that broader coverage.
