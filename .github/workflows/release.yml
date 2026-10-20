@@ -10,6 +10,10 @@ on:
         description: Publish after qualification and public-release environment approval
         default: false
         type: boolean
+      qualify_initial_upgrade:
+        description: Also prepare the signed 0.0.0 test baseline and loopback feed for the first release
+        default: false
+        type: boolean
 permissions:
   contents: read
 concurrency:
@@ -62,14 +66,14 @@ jobs:
         env:
           AMPLIFIER_CERTIFICATE_P12: ${{ secrets.AMPLIFIER_CERTIFICATE_P12 }}
           AMPLIFIER_CERTIFICATE_PASSWORD: ${{ secrets.AMPLIFIER_CERTIFICATE_PASSWORD }}
-          AMPLIFIER_SIGNING_IDENTITY: ${{ vars.AMPLIFIER_SIGNING_IDENTITY }}
+          AMPLIFIER_SIGNING_IDENTITY: ${{ secrets.AMPLIFIER_SIGNING_IDENTITY }}
           AMPLIFIER_NOTARY_KEY_P8: ${{ secrets.AMPLIFIER_NOTARY_KEY_P8 }}
-          AMPLIFIER_NOTARY_KEY_ID: ${{ vars.AMPLIFIER_NOTARY_KEY_ID }}
-          AMPLIFIER_NOTARY_ISSUER_ID: ${{ vars.AMPLIFIER_NOTARY_ISSUER_ID }}
+          AMPLIFIER_NOTARY_KEY_ID: ${{ secrets.AMPLIFIER_NOTARY_KEY_ID }}
+          AMPLIFIER_NOTARY_ISSUER_ID: ${{ secrets.AMPLIFIER_NOTARY_ISSUER_ID }}
         run: python3 scripts/ci-signing.py
       - name: Test, build, sign and notarize
         env:
-          AMPLIFIER_SIGNING_IDENTITY: ${{ vars.AMPLIFIER_SIGNING_IDENTITY }}
+          AMPLIFIER_SIGNING_IDENTITY: ${{ secrets.AMPLIFIER_SIGNING_IDENTITY }}
           AMPLIFIER_UPDATE_FEED_URL: https://github.com/microsoft/amplifier-client-macos/releases/latest/download/appcast.xml
           AMPLIFIER_UPDATE_PUBLIC_KEY: ${{ vars.AMPLIFIER_UPDATE_PUBLIC_KEY }}
         run: bash build-app.sh
@@ -80,6 +84,13 @@ jobs:
           AMPLIFIER_UPDATE_DOWNLOAD_PREFIX: https://github.com/microsoft/amplifier-client-macos/releases/download/${{ inputs.tag }}/
           AMPLIFIER_SPARKLE_PRIVATE_KEY: ${{ secrets.AMPLIFIER_SPARKLE_PRIVATE_KEY }}
         run: bash scripts/generate-appcast.sh
+      - name: Prepare initial signed upgrade qualification
+        if: inputs.qualify_initial_upgrade
+        env:
+          AMPLIFIER_SIGNING_IDENTITY: ${{ secrets.AMPLIFIER_SIGNING_IDENTITY }}
+          AMPLIFIER_UPDATE_PUBLIC_KEY: ${{ vars.AMPLIFIER_UPDATE_PUBLIC_KEY }}
+          AMPLIFIER_SPARKLE_PRIVATE_KEY: ${{ secrets.AMPLIFIER_SPARKLE_PRIVATE_KEY }}
+        run: bash scripts/prepare-upgrade-qualification.sh
       - name: Remove temporary signing credentials
         if: always()
         run: python3 scripts/ci-signing.py cleanup
@@ -92,6 +103,17 @@ jobs:
             dist/SHA256SUMS
             dist/BUILD-INFO.json
             dist/appcast.xml
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: inputs.qualify_initial_upgrade
+        with:
+          name: Amplifier-macOS-upgrade-qualification
+          retention-days: 7
+          path: |
+            upgrade-qualification/baseline/Amplifier-upgrade-baseline.zip
+            upgrade-qualification/feed/Amplifier-macOS.zip
+            upgrade-qualification/feed/appcast.xml
+            upgrade-qualification/QUALIFICATION.json
           if-no-files-found: error
   publish:
     if: inputs.publish && vars.AMPLIFIER_PUBLIC_RELEASES == 'true'

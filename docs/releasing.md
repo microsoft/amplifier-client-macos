@@ -34,11 +34,18 @@ channels, never source files, issues, PRs or command transcripts:
 | `AMPLIFIER_CERTIFICATE_PASSWORD` | Export password |
 | `AMPLIFIER_NOTARY_KEY_P8` | App Store Connect notarization API private key |
 | `AMPLIFIER_SPARKLE_PRIVATE_KEY` | Base64 Ed25519 update signing seed |
+| `AMPLIFIER_SIGNING_IDENTITY` | Approved Developer ID Application identity |
+| `AMPLIFIER_NOTARY_KEY_ID` | Notarization API key identifier |
+| `AMPLIFIER_NOTARY_ISSUER_ID` | Notarization API issuer identifier |
 
-Configure environment variables `AMPLIFIER_SIGNING_IDENTITY`,
-`AMPLIFIER_NOTARY_KEY_ID`, `AMPLIFIER_NOTARY_ISSUER_ID` and
-`AMPLIFIER_UPDATE_PUBLIC_KEY`. Only the last is embedded in the app. The release
-owner must approve signing ownership before the first public installer.
+Configure environment variable `AMPLIFIER_UPDATE_PUBLIC_KEY`; it is embedded in
+the app. Keep account identifiers in secrets so workflow logs mask them. The
+release owner must approve signing ownership before the first public installer.
+
+The owner has approved using the existing maintainer Developer ID for the first
+release. The certificate's publisher identity is visible in the signed download.
+Keep its private material in the protected signing environment. The new app uses
+its own update-signing key.
 
 The signing helper imports credentials into a disposable CI keychain, removes
 transfer files, and restores the previous keychain list on cleanup. Signing
@@ -63,6 +70,15 @@ never silently publish an unsigned fallback or blindly resubmit a rejection.
 6. Approve the protected publication job only after qualification. It uses the
    repository-scoped `GITHUB_TOKEN`; no cross-repository publishing token is needed.
 7. Verify anonymous download, checksums and the installed update configuration.
+
+For the initial `0.1.0` build `1`, enable `qualify_initial_upgrade` to create the
+separate **Amplifier-macOS-upgrade-qualification** artifact. This contains a
+signed/notarized `0.0.0` build `0` fixture and a signed loopback feed whose update
+is byte-identical to the release ZIP. Install the fixture in an isolated test
+folder, serve its `feed` directory on `127.0.0.1:49340` only after checking port
+ownership, and exercise the real updater. The installed candidate must resolve
+the production feed afterward. Preserve checksums and results, then stop the owned
+listener and remove the fixture. Never publish that artifact as an installer.
 
 The workflow validates the tag/version and that its commit belongs to main,
 then builds that exact revision. The publisher rechecks the public tag against
