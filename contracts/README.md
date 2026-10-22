@@ -9,6 +9,7 @@ those promises with specific evidence and derives remaining work.
 | Unified | DC, CX, CS, CD at the [reviewed baseline](../docs/compatibility.md#shared-contract-baseline) | Shared desktop experience, common action meanings, host/client state and change discipline |
 | Mac client | [MP1–5: Mac experience](mac-experience.v1.md) | Native controls, appearance, attention presentation, notice interaction and browser adapter |
 | Mac client | [MR1–6: connection and distribution](mac-connection-release.v1.md) | OS credentials, private reply journal, connection controls, login, signing and updates |
+| Mac client (DRAFT) | [MB1–3: optional browser setup](mac-browser-setup.v1.md) | Explicit external-browser handoff; no native execution authority |
 
 [DJ1–DJ7](../docs/compatibility.md#shared-contract-baseline) are the shared
 desktop acceptance journeys, reusable by the future Windows client. macOS

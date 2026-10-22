@@ -59,6 +59,10 @@ implementation nor a new protocol should inherit Mac compatibility by assumption
 
 ## Method sources reviewed
 
+The proposed optional [browser setup handoff](browser-setup.md) has a separate
+device-v1 feature-branch dependency and qualification record. It does not change
+the released companion-v1 chat protocol or establish a minimum released host.
+
 - Converge family: `c63f1e6bea6d93e5ffb86b0e3dbcc698391cbe9c`,
   [format rationale](https://github.com/microsoft/amplifier-converge/blob/c63f1e6bea6d93e5ffb86b0e3dbcc698391cbe9c/docs/FORMAT.md).
 - Converge Method: `86b9a4a457df22c48b80a4c423b3e421dd309292`,

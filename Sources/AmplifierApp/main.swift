@@ -650,6 +650,10 @@ enum Keychain {
                 manageDevices: { address in
                     let endpoint = try Endpoint(address)
                     NSWorkspace.shared.open(endpoint.route("devices"))
+                }, browserSetup: { address in
+                    let url = try await BrowserSetupClient(endpoint: Endpoint(address)).setupURL()
+                    try Task.checkCancellation()
+                    guard NSWorkspace.shared.open(url) else { throw BrowserSetupError.unavailable }
                 }, pair: { address, showCode in
                     let endpoint = try Endpoint(address)
                     var random = [UInt8](repeating: 0, count: 32)

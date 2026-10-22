@@ -67,6 +67,10 @@ fixes need targeted checks; changed readiness claims need matching evidence.
 
 ## Future direction, separate from preview defects
 
+The proposed [MB1–3 browser setup handoff](browser-setup.md) adds source/core and
+native-harness checks, with execution and physical-browser qualification pending.
+It grants no device authority and does not close the future execution gap below.
+
 Embedded workspace, additional OS capabilities and device execution are **Not yet**.
 They follow [the roadmap](roadmap.md) and shared DSK4/5, with approved bridge/grant
 boundaries before implementation. Windows follows shared DSK3 and must produce
