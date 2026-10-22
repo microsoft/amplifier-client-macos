@@ -59,7 +59,7 @@ implementation nor a new protocol should inherit Mac compatibility by assumption
 
 ## Method sources reviewed
 
-The proposed optional [browser setup handoff](browser-setup.md) has a separate
+The approved optional [browser setup handoff](browser-setup.md) has a separate
 device-v1 feature-branch dependency and qualification record. It does not change
 the released companion-v1 chat protocol or establish a minimum released host.
 

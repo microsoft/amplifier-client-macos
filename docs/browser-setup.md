@@ -1,7 +1,7 @@
 # Optional browser setup integration
 
-Status: proposed implementation, not included in released 0.1.0. The governing
-proposal is [MB1–3](../contracts/mac-browser-setup.v1.md); existing MP/MR promises
+Status: approved setup-only scope; implementation in review, not included in
+released 0.1.0. The governing contract is [MB1–3](../contracts/mac-browser-setup.v1.md); existing MP/MR promises
 remain unchanged. This is an optional route into host setup, not native execution.
 
 ## Journey and ownership
@@ -43,6 +43,15 @@ installation. Public browser-control readiness needs reproducible dependencies,
 bounded screenshot/observation handling, an appropriate extension distribution
 path and matching host/extension qualification. The Mac button does not solve
 those service-owned prerequisites.
+
+## Focused implementation evidence
+
+Mac revision `0b879a3a644654d721cc14fa4e1bdfe26b76689c` passed
+[hosted macOS checks](https://github.com/microsoft/amplifier-client-macos/actions/runs/39716625596):
+31 core tests, including four discovery tests; native editing/login/surface checks,
+including setup target capture, chat preservation and cancellation; 11 publisher
+tests; universal development packaging and artifact-transfer verification.
+These are component and packaging checks, not physical browser-control acceptance.
 
 ## Qualification before broader claims
 

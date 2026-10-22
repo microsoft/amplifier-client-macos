@@ -1,7 +1,7 @@
-# Optional browser setup — v1 (DRAFT 2026-10-21)
+# Optional browser setup — v1 (RATIFIED 2026-10-21)
 
 Clause prefix: **MB**. Parent: [Mac vision](../docs/VISION.md).
-This proposal implements only a setup handoff. Shared device authorization,
+This contract governs only a setup handoff. Shared device authorization,
 execution, Stop and UI-use decisions belong to Unified and its browser extension.
 It does not establish native Mac execution or alter the released chat contract.
 
@@ -39,8 +39,14 @@ address, no connection mutation and cancellation. These do not qualify a real
 browser profile, extension installation, login, execution, sleep/reconnect or Stop.
 See [integration scope and qualification](../docs/browser-setup.md).
 
-## Not in this proposal
+## Not in v1
 
 Automatic extension installation, native messaging registration, execution tokens
 in the Mac app, a second device poller, OS permission requests, desktop control,
 model selection, an agent loop, arbitrary CDP or shell operations.
+
+## Changelog
+
+| Date | Change | Basis |
+| --- | --- | --- |
+| 2026-10-21 | Ratify MB1–3 for optional setup handoff, independent extension enrollment and unchanged chat authority. | Product-owner agreement to browser-only scope; native Mac-app/desktop execution remains unavailable. |

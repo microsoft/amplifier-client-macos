@@ -53,10 +53,10 @@ in the initial companion-focused preview.
 
 ## Optional device seam
 
-The [browser setup proposal](browser-setup.md) adds only anonymous capability
+The [browser setup integration](browser-setup.md) adds only anonymous capability
 discovery and an explicit external-browser handoff. The extension continues to
 connect directly to the host; no native helper, execution credential or extra
-poller is introduced. This proposal is separate from the future native seam below.
+poller is introduced. This approved setup scope is separate from the future native seam below.
 
 A future device capability can use an outbound authenticated channel, a signed
 local helper and an explicitly enrolled browser extension. It needs separately

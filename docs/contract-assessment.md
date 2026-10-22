@@ -67,8 +67,9 @@ fixes need targeted checks; changed readiness claims need matching evidence.
 
 ## Future direction, separate from preview defects
 
-The proposed [MB1–3 browser setup handoff](browser-setup.md) adds source/core and
-native-harness checks, with execution and physical-browser qualification pending.
+The approved [MB1–3 browser setup handoff](browser-setup.md) passed focused core
+and native-harness checks at `0b879a3`; execution and physical-browser qualification
+remain pending.
 It grants no device authority and does not close the future execution gap below.
 
 Embedded workspace, additional OS capabilities and device execution are **Not yet**.
