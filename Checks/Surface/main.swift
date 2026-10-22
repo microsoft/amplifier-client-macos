@@ -262,11 +262,18 @@ MainActor.assumeIsolated {
     preferences.set("http://127.0.0.1:8941", forKey: "endpoint")
     defer { preferences.removePersistentDomain(forName: suite) }
     var changes: [String] = []; var connections = 0; var connectionActions: [ConnectionAction] = []
+    var browserTargets: [String] = []; var browserOpened = 0
+    var releaseBrowser: CheckedContinuation<Void, Never>?
     let settings = SettingsWindow(defaults: preferences, recoveryPath: nil, artwork: { _, _, _ in nil },
         preferenceChanged: { changes.append($0) },
         connectionAction: { action in
             connectionActions.append(action)
             preferences.set(action != .resume, forKey: "connectionPaused")
+        }, browserSetup: { target in
+            browserTargets.append(target)
+            await withCheckedContinuation { releaseBrowser = $0 }
+            try Task.checkCancellation()
+            browserOpened += 1
         }, connect: { _, _ in connections += 1 })
     precondition(settings.window!.level == .normal, "Settings must not float over other apps")
     precondition(!settings.window!.styleMask.contains(.fullSizeContentView), "Sidebar must stay below the title bar")
@@ -306,6 +313,32 @@ MainActor.assumeIsolated {
     precondition(!preferences.bool(forKey: "connectionPaused") && pause.title == "Disconnect")
     precondition(connectionActions == [.pause, .resume] && connections == 0,
                  "Connection actions must target saved settings, never the edited address draft")
+    let browserAccess = connectionButtons.first { $0.title == "Browser access…" }!
+    precondition(browserTargets.isEmpty, "Opening Settings must not discover or enroll browser access")
+    @MainActor func waitForSetup(_ predicate: () -> Bool) {
+        let deadline = ProcessInfo.processInfo.systemUptime + 3
+        while !predicate() && ProcessInfo.processInfo.systemUptime < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+        }
+        precondition(predicate(), "Browser setup callback did not settle")
+    }
+    browserAccess.performClick(nil)
+    waitForSetup { releaseBrowser != nil }
+    precondition(!browserAccess.isEnabled && browserTargets == ["https://example.invalid"])
+    browserAccess.performClick(nil)
+    fields.first { $0.isEditable && !($0 is NSSecureTextField) }!.stringValue = "https://other.invalid"
+    releaseBrowser?.resume(); releaseBrowser = nil
+    waitForSetup { browserAccess.isEnabled }
+    precondition(browserOpened == 1 && browserTargets.count == 1 && connections == 0)
+    precondition(preferences.string(forKey: "endpoint") == "http://127.0.0.1:8941",
+                 "Browser setup must neither save the address draft nor change the chat connection")
+    browserAccess.performClick(nil)
+    waitForSetup { releaseBrowser != nil }
+    settings.window!.close()
+    releaseBrowser?.resume(); releaseBrowser = nil
+    waitForSetup { browserAccess.isEnabled }
+    precondition(browserOpened == 1, "Closing Settings cancels delayed browser activation")
+    print("PASS: optional browser handoff is explicit, captures its target, preserves chat and cancels on close")
     let reopened = SettingsWindow(defaults: preferences, recoveryPath: nil, artwork: { _, _, _ in nil }, preferenceChanged: {_ in}, connect: {_,_ in})
     precondition(reopened.window!.title == "Connection", "Restore last settings pane")
     precondition(TempoControls.statusSymbol(attention: false, working: false) == nil)
