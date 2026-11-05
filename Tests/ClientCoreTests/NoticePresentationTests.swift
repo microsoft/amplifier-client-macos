@@ -45,4 +45,40 @@ final class NoticePresentationTests: XCTestCase {
         XCTAssertEqual(WorkPreview.fallback(status:"working"),"Thinking…")
         XCTAssertEqual(WorkPreview.fallback(status:"stopping"),"Stopping…")
     }
+    func testMarkdownPreviewsArePlainAndBounded() {
+        XCTAssertEqual(NoticeText.plain("## **Ready** — [release notes](https://example.org)\n- `file_name.swift`"), "Ready — release notes file_name.swift")
+        XCTAssertEqual(NoticeText.plain("**Completed in this chat’s browser…"), "Completed in this chat’s browser…")
+        XCTAssertEqual(NoticeText.plain("a\u{202E}b\n\t c"), "a b c")
+        XCTAssertEqual(NoticeText.plain("abcdefgh", limit: 5), "abcd…")
+        XCTAssertEqual(NoticeText.plain("```swift\nlet answer = 42\n```"), "let answer = 42")
+    }
+    func testProjectedActionHintsWithoutRawPayloads() {
+        let base: [String: Any] = ["id":"t1", "kind":"tool", "phase":"running", "label":"app_control",
+            "input":["operation":"secret raw operation"], "inputPreview":"private command", "output":"private output"]
+        var row = base
+        row["actionPath"] = "dispatch → window.focus"
+        row["inputSummary"] = ["operation":"dispatch", "prompt":"secret prompt", "command":"secret command"]
+        XCTAssertEqual(WorkPreview.from(nodes:[row])?.text, "App · window focus")
+        row["actionPath"] = nil
+        XCTAssertEqual(WorkPreview.from(nodes:[row])?.text, "App · dispatch")
+        XCTAssertEqual(WorkPreview.from(nodes:[base])?.text, "Using app controls…")
+        row["label"] = "read_file"; row["inputSummary"] = ["file_path":"/private/project/README.md"]
+        XCTAssertEqual(WorkPreview.from(nodes:[row])?.text, "Reading README.md")
+        row["label"] = "bash"; row["inputSummary"] = ["command":"curl --header secret"]
+        XCTAssertEqual(WorkPreview.from(nodes:[row])?.text, "Running a command…")
+        row["label"] = "custom_tool"; row["inputSummary"] = ["operation":"credential=secret"]
+        XCTAssertEqual(WorkPreview.from(nodes:[row])?.text, "Using custom tool…")
+        row["tool"] = "bash"; row["label"] = "Running unit tests"
+        XCTAssertEqual(WorkPreview.from(nodes:[row])?.text, "Running unit tests")
+    }
+    func testConcurrentToolsRemainVisibleThroughModelUpdates() {
+        let first: [String:Any] = ["id":"t1","kind":"tool","phase":"running","label":"read_file"]
+        var second: [String:Any] = ["id":"t2","kind":"tool","phase":"running","label":"web_search"]
+        let model: [String:Any] = ["id":"m1","kind":"llm","phase":"running","label":"Model call"]
+        XCTAssertEqual(WorkPreview.from(nodes:[first,second,model])?.text, "Searching the web… · +1 tool")
+        second["endedAt"] = 1
+        XCTAssertEqual(WorkPreview.from(nodes:[first,second,model])?.text, "Reading a file…")
+        XCTAssertEqual(WorkPreview.from(nodes:[second,model])?.text, "Thinking…")
+    }
+
 }

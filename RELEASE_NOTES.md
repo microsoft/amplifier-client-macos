@@ -1,4 +1,23 @@
-# Amplifier for Mac 0.1.3
+# Amplifier for Mac 0.1.4
+
+Tempo's activity cards show clearer action details and make better use of their space.
+
+- App controls show the available action, such as window focus, instead of only
+  the tool name. File operations and other tools use readable labels and selected
+  host-provided hints; raw commands, prompts and result bodies stay out of cards.
+- Response snippets remove Markdown formatting. Detail gets its own wider line,
+  independent of the title, status icon and dismiss control.
+- Overlapping tools retain useful activity with a compact additional-tool count.
+  A chat with an unread answer and ongoing work shows its current action alongside
+  the unread cue instead of presenting the older answer as current work.
+
+Existing connections, settings, avatars and saved replies are preserved. Older
+hosts without action hints keep readable fallback labels. No server upgrade is
+required. Core/native checks and universal compilation precede signed app/DMG
+and upgrade qualification; manual VoiceOver and physical Intel remain separate
+coverage. PWA auto-hide is not included.
+
+## Previous release: 0.1.3
 
 Tempo’s expanded notices keep your reading position as activity updates arrive.
 

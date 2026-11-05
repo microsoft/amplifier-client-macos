@@ -73,9 +73,20 @@ Match sidebar symbol meanings with native icons: open progress ring for work,
 dot for unread, question circle for a decision, pause circle for blocked work,
 and exclamation circle for errors. Use available host facts; do not infer a
 blocked state from arbitrary text. Model activity and unspecified model waits
-read “Thinking…”. Other activity shows the public action label and available
-summary, truncated on one line. Never turn tool input/output or model reasoning
-into a preview. Detail requests rotate through working chats with at most five
+read “Thinking…”. Other activity prefers the producer's useful public title or
+summary, without repeating the tool name. Use only selected host-projected hints
+when that title is generic: app action path, action/operation identifier, or a
+file's leaf name. Never render raw arguments, inputPreview, commands, prompts,
+results or model reasoning. Older hosts without hints keep a readable fallback.
+When tools overlap, retain the latest available active tool and a compact count;
+a model update cannot hide a still-active tool. Counts describe the bounded loaded
+activity, not unobserved work. A working chat with an unread answer shows “Unread”
+and its current action rather than the previous answer as ongoing activity.
+
+Strip Markdown from response snippets, normalize controls/whitespace and bound
+text. Titles and details each truncate independently on one line; detail uses
+the width below the status/dismiss controls, with full bounded text in the tooltip
+and the chat button's accessibility label. Detail requests rotate through working chats with at most five
 work requests in flight; they stop when Tempo is hidden.
 
 ## Floating notice list

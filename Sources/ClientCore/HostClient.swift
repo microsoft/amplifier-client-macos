@@ -168,7 +168,8 @@ public final class HostClient {
             if row["role"] as? String == "user" { return nil }
             if row["role"] as? String == "assistant", let text = row["text"] as? String,
                !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return String(text.prefix(600))
+                let preview = NoticeText.plain(text)
+                return preview.isEmpty ? nil : preview
             }
         }
         return nil

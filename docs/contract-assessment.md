@@ -104,3 +104,26 @@ transparent scrolling, placement and non-key-window assertions remain in the
 same harness. This is component qualification, not a signed install, a new
 physical multi-display run, or manual VoiceOver acceptance; MAC3 retains those
 limits. Release/adoption is separate from this source change.
+
+## Readable notice activity successor (2026-11-05)
+
+MP3/4 uses existing Unified display hints (`actionPath` and selected
+`inputSummary` fields) rather than raw inputs or a new protocol. Reviewed Unified
+`c9ca3976f0392bfa1424331dfc97f7032404fe78`: `tool_observations.py`,
+`browser_detail.py` and the web client's `execution-content.js`. The native view
+is deliberately narrower than expanded web inspection: no commands, prompts,
+result bodies or generic JSON previews. Missing hints retain a useful fallback.
+
+Design comparison: Constellation's adapter-activity contract at
+`c60ddf03d47eb8005e03f9325ccba67580819bf7`, Slack's `work_status.rs` at
+`f1b44bc65a39778cd46566619e79e5d49211da1f`, and Instance's metadata-only
+`activity.rs` at `2940e3f4b4beb5aaa11d2789b16d6408850c6e71`.
+Reuse the presentation principles, not their ACP transport or runtime dependency.
+Unified supplies complete bounded node snapshots rather than ACP partial events.
+
+Mac component qualification: 41 core tests pass, including Markdown cleanup,
+projected action hints/raw-payload exclusion, model wording and concurrent tools.
+Native surface checks pass independent title/detail geometry and card hit routing,
+plus the prior scroll/dismiss/resize/placement assertions. These isolated synthetic
+checks do not establish a new signed installation, live service acceptance or
+manual VoiceOver coverage. Publication and adoption remain separate.
