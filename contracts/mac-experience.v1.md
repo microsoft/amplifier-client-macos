@@ -47,13 +47,21 @@ Amplifier.app
    Completion/error reactions play once per observed event, then ongoing work
    resumes its animation without clearing unread/error indicators. Offline and
    Reduce Motion remain still; animation never marks an update read.
+   Notice symbols retain the sidebar's work/unread/question/error meanings.
+   A local dismissal does not acknowledge host attention. Dismissed work stays
+   hidden until its known execution state changes, not on each progress refresh.
    Broken: working alone increments attention or a palette disguises an error.
    Affected: people deciding what needs review.
 
 4. **MP4 — Notices remain compact and usable.** Support collapsed reveals and
    explicit expansion/collapse; drag from notices and capture wheel input across
    transparent list gaps without visible scrollbars. Keep screen margins and
-   close avatar spacing. Broken: scrolling gaps moves the app behind Tempo,
+   close avatar spacing. Updates preserve the reader's row and scroll offset.
+   Dragging the expanded header resizes the list: full extent follows content
+   up to the screen boundary; dragging shorter remembers a height cap. Both
+   modes shrink to fit fewer items. Show public action detail on one truncated
+   line, with model waits labeled “Thinking…”. Broken: an update resets scrolling,
+   scrolling gaps moves the app behind Tempo,
    or an opaque rectangle fills the notice list. Affected: companion users.
 
 5. **MP5 — Handoffs respect installed identity.** Apply DC4 through an origin/scope
@@ -84,4 +92,5 @@ What browser handoff coverage is needed before adding another supported browser?
 
 | Date | Change | Basis |
 | --- | --- | --- |
+| 2026-11-05 | Extend MP3/4 with stable scrolling, resize/fit semantics, local dismissal and sidebar-style status/action detail. | Product-owner request; shared attention authority remains unchanged. |
 | 2026-10-20 | Give existing Mac UX requirements MP1–5; delegate shared meanings to DC/CX/CS. | Product-owner approval of contract alignment; preserves the existing interaction guide and separates future Windows implementation. |

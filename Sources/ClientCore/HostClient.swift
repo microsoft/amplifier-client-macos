@@ -173,13 +173,8 @@ public final class HostClient {
         }
         return nil
     }
-    public func workPreview(sessionID: String) async throws -> String? {
-        let rows = try await details(sessionID: sessionID, part: "nodes")
-        let live = ["running", "working", "streaming", "pending", "started"]
-        let row = rows.last { row in
-            row["endedAt"] == nil && live.contains((row["status"] ?? row["phase"]) as? String ?? "")
-        }
-        return (row?["label"] as? String).map { String($0.prefix(140)) }
+    public func workPreview(sessionID: String) async throws -> WorkPreview? {
+        WorkPreview.from(nodes: try await details(sessionID: sessionID, part: "nodes"))
     }
 
 }

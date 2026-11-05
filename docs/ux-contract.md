@@ -61,6 +61,36 @@ repeating desktop notifications; it is not a separate unread list. A chat with b
 an update and ongoing work gets one update card; after review, ongoing work may
 remain without an attention badge.
 
+Each expanded card has a direct dismiss control. Dismissal hides that card from
+Tempo locally, preserving the host's unread state and canonical attention count.
+An unchanged attention fingerprint stays hidden; a new fingerprint can return.
+Working cards stay hidden for the same execution node/phase and return for a new
+action or lifecycle state. Progress text alone does not resurrect a card, nor
+does temporarily missing detail after a restart. Stop/disappearance retires the
+matching local dismissal. These records are scoped to the selected host identity.
+
+Match sidebar symbol meanings with native icons: open progress ring for work,
+dot for unread, question circle for a decision, pause circle for blocked work,
+and exclamation circle for errors. Use available host facts; do not infer a
+blocked state from arbitrary text. Model activity and unspecified model waits
+read “Thinking…”. Other activity shows the public action label and available
+summary, truncated on one line. Never turn tool input/output or model reasoning
+into a preview. Detail requests rotate through working chats with at most five
+work requests in flight; they stop when Tempo is hidden.
+
+## Floating notice list
+
+Refreshes preserve a visible row's position, including removal of earlier rows.
+If no visible row survives, retain the distance from the top and clamp to the new
+contents. Keep the list background transparent and capture wheel input in gaps.
+
+Click the expanded header to collapse; drag it vertically to resize. Growing to
+the content or screen limit enters fit-all mode, which follows later growth and
+shrinkage within screen margins. Dragging shorter establishes a persistent maximum
+height. The list always shrinks to its contents; that temporary shrink does not
+erase the remembered maximum. Card dragging still moves Tempo. Accessible header
+actions offer Show all updates, Make list taller and Make list shorter.
+
 The resting pill uses semantic colors independent of avatar shape, palette and
 finish: red for an unread session error, blue for other updates to review, teal
 for work alone, gray for idle and amber for disconnection, in that priority order.
