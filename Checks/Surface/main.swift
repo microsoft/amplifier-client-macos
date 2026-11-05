@@ -85,7 +85,10 @@ MainActor.assumeIsolated {
     print("PASS: hover collapse with bubbles, no permanent click latch, first-click controls and drag surfaces")
 
     precondition(!window.canBecomeKey && !window.canBecomeMain, "Avatar controls must not take keyboard focus")
-    let bubbles = TempoBubbles()
+    let noticeDomain = "amplifier-notice-check-" + UUID().uuidString
+    let noticeDefaults = UserDefaults(suiteName: noticeDomain)!
+    defer { noticeDefaults.removePersistentDomain(forName: noticeDomain) }
+    let bubbles = TempoBubbles(defaults: noticeDefaults)
     precondition(!bubbles.window.canBecomeKey && !bubbles.window.canBecomeMain, "Notice controls must not take keyboard focus")
     bubbles.openChat = { actions.append($0) }
     bubbles.update([.init(key: "a", title: "Planning the next release", detail: "Response ready", sessionID: "chat-1")], anchor: window, keepExisting: false)
@@ -184,6 +187,53 @@ MainActor.assumeIsolated {
         window.setFrameOrigin(NSPoint(x: -10000, y: -10000))
         print("PASS: real WindowServer wheel routing over gaps and cards")
     }
+    // Detail refresh must preserve the reading location, not return to row one.
+    list.contentView.scroll(to: NSPoint(x: 0, y: 200)); list.reflectScrolledClipView(list.contentView)
+    let beforeRefresh = list.documentVisibleRect
+    let updated = many.map { row -> TempoBubbles.Row in var row = row; row.detail = "Thinking…"; return row }
+    bubbles.update(updated, anchor: window, keepExisting: false, attentionCount: 11)
+    let refreshed = bubbles.window.contentView!.subviews.compactMap { $0 as? NoticeScrollView }.first!
+    precondition(abs(refreshed.documentVisibleRect.minY - beforeRefresh.minY) < 1, "Detail refresh preserves scroll")
+    let refreshedStack = refreshed.documentView as! NSStackView
+    let survivor = refreshedStack.arrangedSubviews[6]
+    let offset = survivor.frame.maxY - refreshed.documentVisibleRect.maxY
+    bubbles.update(Array(updated.dropFirst(2)), anchor: window, keepExisting: true, attentionCount: 9)
+    let removed = bubbles.window.contentView!.subviews.compactMap { $0 as? NoticeScrollView }.first!
+    let surviving = (removed.documentView as! NSStackView).arrangedSubviews[4]
+    precondition(abs(surviving.frame.maxY - removed.documentVisibleRect.maxY - offset) < 1, "Removing earlier rows preserves the visible survivor")
+    var dismissed: String?
+    bubbles.dismiss = { dismissed = $0.key }
+    let firstMaterial = (removed.documentView as! NSStackView).arrangedSubviews[0] as! TempoMaterial
+    let dismissButton = firstMaterial.content.subviews.compactMap { $0 as? FirstClickButton }.last!
+    dismissButton.performClick(nil)
+    precondition(dismissed == "row-2", "Dismiss addresses the current row")
+    bubbles.availableHeightOverride = 700
+    bubbles.update(Array(updated.prefix(2)), anchor: window, keepExisting: true, attentionCount: 1)
+    bubbles.resizeList(to: 2000)
+    precondition(bubbles.fitsContents && bubbles.listHeight == 116, "Cannot drag past all contents")
+    bubbles.update(updated, anchor: window, keepExisting: true, attentionCount: 11)
+    precondition(bubbles.listHeight == 700, "Fit-all grows until the screen bound")
+    bubbles.update(Array(updated.prefix(2)), anchor: window, keepExisting: true)
+    precondition(bubbles.listHeight == 116, "Fit-all shrinks with contents")
+    bubbles.resizeList(to: 80)
+    bubbles.update(updated, anchor: window, keepExisting: true)
+    precondition(!bubbles.fitsContents && bubbles.listHeight == 80, "Dragging down replaces fit-all with remembered cap")
+    precondition(noticeDefaults.double(forKey: "noticeListMaximum") == 80 && !noticeDefaults.bool(forKey: "noticeListFitsContents"))
+    bubbles.resizeList(to: 178)
+    let resizeHeader = bubbles.window.contentView!.subviews.compactMap { $0 as? TempoMaterial }.first!
+    let resizeButton = resizeHeader.content.subviews.compactMap { $0 as? NoticeResizeButton }.first!
+    let at = resizeButton.convert(NSPoint(x: 80, y: 12), to: nil)
+    func event(_ type: NSEvent.EventType, _ delta: CGFloat) -> NSEvent {
+        NSEvent.mouseEvent(with: type, location: NSPoint(x: at.x, y: at.y + delta), modifierFlags: [], timestamp: 0,
+            windowNumber: bubbles.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+    }
+    app.postEvent(event(.leftMouseUp,62), atStart: true)
+    app.postEvent(event(.leftMouseDragged,62), atStart: true)
+    resizeButton.mouseDown(with: event(.leftMouseDown,0))
+    precondition(bubbles.listHeight == 240 && bubbles.listExpanded, "Header drag resizes rather than collapsing or moving avatar")
+    precondition(resizeButton.accessibilityCustomActions()?.count == 3, "Resize has accessible alternatives")
+    bubbles.resizeList(to: 178); bubbles.availableHeightOverride = nil
+    print("PASS: refreshed scroll anchor, removed rows, dismiss target, resize cap, fit-all growth/shrink and persistence")
     collapseList.performClick(nil)
     precondition(!bubbles.listExpanded && bubbles.window.frame.height == 54)
     bubbles.close()

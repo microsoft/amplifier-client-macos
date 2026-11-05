@@ -1,4 +1,23 @@
-# Amplifier for Mac 0.1.2
+# Amplifier for Mac 0.1.3
+
+Tempo’s expanded notices keep your reading position as activity updates arrive.
+
+- Drag the top bar to resize the list. At full extent it follows the contents up
+  to the screen edge; drag shorter to remember a maximum height. It always
+  shrinks when fewer cards remain.
+- Dismiss cards directly. Working cards return when their activity changes;
+  dismissing a card does not mark the chat read or clear its host attention badge.
+- Sidebar-style status icons make activity easier to recognize. Model waits read
+  “Thinking…”; other work shows the available public action label and summary.
+- Transparent scrolling gaps, screen margins and nonactivating controls remain.
+
+The existing connection, preferences, avatars and saved messages are preserved.
+PWA auto-hide is not included in this update. Native component and universal
+build checks pass; signed app/DMG and upgrade qualification precede publication.
+Manual VoiceOver, physical Intel and the full multi-display matrix remain
+follow-up coverage, not claims made by this release.
+
+## Previous release: 0.1.2
 
 Tempo resumes its working animation after a completion or error reaction when
 other chats are still working. Unread updates and errors keep their indicators;

@@ -87,3 +87,20 @@ Clear/Dark animation coverage, and makes attention reactions host-driven and
 one-shot. See [avatar release readiness](avatar-release-readiness.md) for its
 source/native evidence and the still-separate signed-candidate gates. E2/E3 above
 remain evidence for 0.1.0; they are not relabeled as qualification of this change.
+
+## Notice interaction successor (2026-11-05)
+
+MP3/4 source changes preserve scroll anchors, add a persistent height cap/fit-all
+mode and local state-aware dismissal, and show sidebar-style icons and bounded
+public action text. The source comparison used Unified
+`3fc46f0fdf426321f18e6fd3d3fbe506806b921f` navigation presentation and companion
+attention projection. It introduces no host protocol or shared contract change.
+
+Core checks cover sizing, dismissal across state changes/missing detail, status
+classification and public-only action formatting. The macOS native surface
+harness covers refresh/removal scroll anchors, current dismiss targets,
+fit-all growth/shrinkage, persistent caps and a posted top-bar drag. Existing
+transparent scrolling, placement and non-key-window assertions remain in the
+same harness. This is component qualification, not a signed install, a new
+physical multi-display run, or manual VoiceOver acceptance; MAC3 retains those
+limits. Release/adoption is separate from this source change.

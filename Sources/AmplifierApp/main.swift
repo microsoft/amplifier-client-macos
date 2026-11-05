@@ -70,8 +70,9 @@ enum Keychain {
     private var bubblesManual = false
     private var autoBubblesSuppressed = false
     private var previews: [String: String] = [:]
-    private var workLabels: [String: String] = [:]
+    private var workLabels: [String: WorkPreview] = [:]
     private var detailRequests = Set<String>()
+    private var nextWorkDetail = 0
     private var previewAttempts = Set<String>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -518,16 +519,22 @@ enum Keychain {
     /// Keep ongoing work visible without adding it to the attention count.
     private func activityRows() -> [TempoBubbles.Row] {
         guard connected, let latest else { return [] }
-        var rows = latest.items.filter { included($0) }.map {
-            TempoBubbles.Row(key: $0.key, title: $0.title, detail: previews[$0.key] ?? $0.summary, sessionID: $0.sessionId)
+        var rows = latest.items.filter { included($0) }.map { item in
+            TempoBubbles.Row(key: item.key, title: item.title, detail: previews[item.key] ?? item.summary, sessionID: item.sessionId, status: NoticeStatus.attention(kind: item.kind, working: latest.sessions.contains { $0.id == item.sessionId && $0.isWorking }), dismissalState: item.key)
         }
         let noticed = Set(rows.map(\.sessionID))
         if defaults.bool(forKey: "workBubbles") {
             rows += latest.sessions.filter { $0.isWorking && !noticed.contains($0.id) }.map {
-                TempoBubbles.Row(key: "work:" + $0.id, title: $0.title, detail: workLabels[$0.id] ?? $0.status.capitalized, sessionID: $0.id)
+                TempoBubbles.Row(key: "work:" + $0.id, title: $0.title, detail: workLabels[$0.id]?.text ?? WorkPreview.fallback(status: $0.status), sessionID: $0.id, status: .working, dismissalState: "work|" + $0.status + "|" + (workLabels[$0.id]?.stateID ?? ""))
             }
         }
-        return rows
+        let scope = (host?.endpoint.url.absoluteString ?? "") + "|" + latest.hostIdentity
+        let stored = defaults.dictionary(forKey: "dismissedTempoNotices") as? [String: String] ?? [:]
+        let prefix = scope + "|"
+        let current = Dictionary(uniqueKeysWithValues: rows.map { (prefix + $0.key, $0.dismissalState) })
+        let saved = NoticeDismissal.reconcile(stored, current: current)
+        if saved != stored { defaults.set(saved, forKey: "dismissedTempoNotices") }
+        return rows.filter { saved[prefix + $0.key] == nil }
     }
     private func refreshBubbles() {
         guard connected, let latest, let client = host, panel.isVisible else { closeBubbles(); return }
@@ -538,12 +545,18 @@ enum Keychain {
         let rows = activityRows()
         if rows.isEmpty { closeBubbles(); return }
         bubbles.openChat = { id in WebAppOpener.open(client.endpoint.chatURL(id)) }
+        bubbles.dismiss = { [weak self] row in
+            guard let self, self.host === client, self.latest?.hostIdentity == latest.hostIdentity else { return }
+            var saved = self.defaults.dictionary(forKey: "dismissedTempoNotices") as? [String: String] ?? [:]
+            saved[client.endpoint.url.absoluteString + "|" + latest.hostIdentity + "|" + row.key] = row.dismissalState
+            self.defaults.set(saved, forKey: "dismissedTempoNotices"); self.refreshBubbles()
+        }
         bubbles.update(rows, anchor: panel, keepExisting: bubblesManual, attentionCount: latest.items.filter { included($0) }.count)
         surface.setBubblesVisible(true)
     }
     private func requestVisibleDetails() {
-        guard connected, bubblesOpen, let latest, let client = host else { return }
-        for alert in latest.items.filter({ included($0) && $0.allowsReply }).prefix(10) where previews[alert.key] == nil && !previewAttempts.contains(alert.key) {
+        guard connected, panel.isVisible, let latest, let client = host else { return }
+        for alert in latest.items.filter({ bubblesOpen && included($0) && $0.allowsReply }).prefix(10) where previews[alert.key] == nil && !previewAttempts.contains(alert.key) {
             let key = "response:" + alert.key
             guard detailRequests.insert(key).inserted else { continue }
             Task {
@@ -552,14 +565,24 @@ enum Keychain {
             }
         }
         guard defaults.bool(forKey: "workBubbles") else { return }
-        for chat in latest.sessions.filter({ $0.isWorking }).prefix(5) {
+        let working = latest.sessions.filter { $0.isWorking }
+        guard !working.isEmpty else { return }
+        let start = nextWorkDetail % working.count
+        nextWorkDetail = (start + min(5, working.count)) % working.count
+        for offset in 0..<min(5, working.count) {
+            if detailRequests.filter({ $0.hasPrefix("work:") }).count >= 5 { break }
+            let chat = working[(start + offset) % working.count]
             let key = "work:" + chat.id
             guard detailRequests.insert(key).inserted else { continue }
             Task {
-                let text = try? await client.workPreview(sessionID: chat.id)
-                guard self.host === client else { return }
-                detailRequests.remove(key); workLabels[chat.id] = text
-                refreshBubbles()
+                defer { if self.host === client { detailRequests.remove(key) } }
+                do {
+                    let text = try await client.workPreview(sessionID: chat.id)
+                    guard self.host === client,
+                          self.latest?.sessions.contains(where: { $0.id == chat.id && $0.isWorking }) == true else { return }
+                    workLabels[chat.id] = text
+                    refreshBubbles()
+                } catch { /* Keep the last known action on a failed read. */ }
             }
         }
     }
