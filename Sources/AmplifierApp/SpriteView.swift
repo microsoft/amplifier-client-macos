@@ -123,7 +123,8 @@ import ClientCore
         let pose = AvatarPose.sample(shape: shape, state: playback.state, elapsed: elapsed, reduced: reduced)
         let pivotY: CGFloat = shape == "d20" ? 160 : (shape == "meter" && playback.state == .working ? 28 : 60)
         context.translateBy(x: 160, y: pivotY + pose.rise)
-        context.rotate(by: pose.tilt * .pi/180)
+        // Choreography uses image coordinates (downward Y); AppKit uses upward Y.
+        context.rotate(by: -pose.tilt * .pi/180)
         context.scaleBy(x: pose.scaleX, y: pose.scaleY)
         context.translateBy(x: -160, y: -pivotY)
         // Add weighted premultiplied layers in an isolated transparent group.
