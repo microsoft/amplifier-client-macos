@@ -9,6 +9,8 @@ import ClientCore
     var open: (() -> Void)?
     #if NATIVE_CHECK
     var previewElapsed: Double?
+    var animationTimerIsRunning: Bool { timer != nil }
+    var previewReducedMotion: Bool? { didSet { refreshTimer(); needsDisplay = true } }
     #endif
     private(set) var playback = AvatarPlayback()
     private var frames: [CGImage] = []
@@ -22,6 +24,12 @@ import ClientCore
     private var palette = "blue"
     private var ink = NSRect(x: 0, y: 0, width: 1, height: 1)
     private var accessibilityObserver: NSObjectProtocol?
+    private var reducedMotion: Bool {
+        #if NATIVE_CHECK
+        if let previewReducedMotion { return previewReducedMotion }
+        #endif
+        return NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    }
     override var isOpaque: Bool { false }
     override var mouseDownCanMoveWindow: Bool { false }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
@@ -88,7 +96,7 @@ import ClientCore
     func animate(_ enabled: Bool) { self.enabled = enabled; refreshTimer(); needsDisplay = true }
     private func refreshTimer() {
         let shouldRun = playback.animates(at: ProcessInfo.processInfo.systemUptime, visible: enabled,
-            reducedMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+            reducedMotion: reducedMotion)
         if !shouldRun { timer?.invalidate(); timer = nil; return }
         guard timer == nil else { return }
         let timer = Timer(timeInterval: 1.0/50, repeats: true) { [weak self] _ in
@@ -109,19 +117,22 @@ import ClientCore
     }
     override func draw(_ dirtyRect: NSRect) {
         guard !frames.isEmpty, let context = NSGraphicsContext.current?.cgContext else { return }
-        let reduced = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        var elapsed = playback.elapsed(at: ProcessInfo.processInfo.systemUptime)
+        let reduced = reducedMotion
+        var now = ProcessInfo.processInfo.systemUptime
         #if NATIVE_CHECK
-        elapsed = previewElapsed ?? elapsed
+        if let previewElapsed { now += previewElapsed - playback.elapsed(at: now) }
         #endif
+        let presentation = playback.presentation(at: now)
+        let state = reduced ? playback.state : presentation.state
+        let elapsed = reduced ? playback.elapsed(at: now) : presentation.elapsed
         context.saveGState(); defer { context.restoreGState() }
         let side = min(bounds.width, bounds.height)
         context.translateBy(x: bounds.midX-side/2, y: bounds.midY-side/2)
         context.scaleBy(x: side/320, y: side/320); context.interpolationQuality = .high
         let rect = CGRect(x: 0, y: 0, width: 320, height: 320)
-        if playback.state == .working, !reduced, let frame = workingFrame(at: elapsed) { context.draw(frame, in: rect); return }
-        let pose = AvatarPose.sample(shape: shape, state: playback.state, elapsed: elapsed, reduced: reduced)
-        let pivotY: CGFloat = shape == "d20" ? 160 : (shape == "meter" && playback.state == .working ? 28 : 60)
+        if state == .working, !reduced, let frame = workingFrame(at: elapsed) { context.draw(frame, in: rect); return }
+        let pose = AvatarPose.sample(shape: shape, state: state, elapsed: elapsed, reduced: reduced)
+        let pivotY: CGFloat = shape == "d20" ? 160 : (shape == "meter" && state == .working ? 28 : 60)
         context.translateBy(x: 160, y: pivotY + pose.rise)
         // Choreography uses image coordinates (downward Y); AppKit uses upward Y.
         context.rotate(by: -pose.tilt * .pi/180)

@@ -1,4 +1,12 @@
-# Amplifier for Mac 0.1.1
+# Amplifier for Mac 0.1.2
+
+Tempo resumes its working animation after a completion or error reaction when
+other chats are still working. Unread updates and errors keep their indicators;
+they no longer leave the avatar static while the status pill shows activity.
+Reactions still play once per event, and Reduce Motion and hidden/offline
+animation suspension remain intact. Applies to all six shapes and both finishes.
+
+## Previous release: 0.1.1
 
 Tempo has a refreshed family of six crystal avatars: Relay, Accord, d20, Crest,
 Meter and a Clippy tribute. Each has Clear and Dark artwork, eight color choices,

@@ -37,11 +37,15 @@ public enum AvatarCatalog {
 public struct AvatarPlayback {
     public private(set) var state: AvatarState = .offline
     private var started: TimeInterval = 0
+    private var workingStarted: TimeInterval?
     // Bound memory while retaining reactions across reconnects and menu rebuilds.
     private var seen: [String] = []
     public init() {}
     public mutating func update(connected: Bool, connecting: Bool, working: Int,
                                 items: [AttentionItem], scope: String, now: TimeInterval) {
+        if connected && working > 0 {
+            if workingStarted == nil { workingStarted = now }
+        } else { workingStarted = nil }
         let errors = items.filter(\.isError)
         let input = items.filter { !$0.isError && $0.kind != "completion" }
         let next: AvatarState = !connected ? (connecting ? .connecting : .offline) :
@@ -59,8 +63,18 @@ public struct AvatarPlayback {
         state = next
     }
     public func elapsed(at now: TimeInterval) -> TimeInterval { max(0, now - started) }
+    /// Attention remains visible in the badge/pill after its one-shot reaction.
+    /// It must not suppress the working loop for other ongoing chats.
+    public func presentation(at now: TimeInterval) -> (state: AvatarState, elapsed: TimeInterval) {
+        if let workingStarted, state == .working ||
+            ((state == .ready || state == .error) && elapsed(at: now) >= 4) {
+            return (.working, max(0, now - workingStarted))
+        }
+        return (state, elapsed(at: now))
+    }
     public func animates(at now: TimeInterval, visible: Bool, reducedMotion: Bool) -> Bool {
-        visible && !reducedMotion && state != .offline && (state.loops || elapsed(at: now) < 4)
+        let shown = presentation(at: now)
+        return visible && !reducedMotion && shown.state != .offline && (shown.state.loops || shown.elapsed < 4)
     }
 }
 

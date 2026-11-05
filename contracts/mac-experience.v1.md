@@ -44,7 +44,8 @@ Amplifier.app
    badge, exact attention counts inside the app, and semantic status independent
    of avatar palette. The host feed, not delivery history, determines updates.
    State-specific light and motion remain consistent across finishes/palettes.
-   Completion/error reactions play once per observed event, while offline and
+   Completion/error reactions play once per observed event, then ongoing work
+   resumes its animation without clearing unread/error indicators. Offline and
    Reduce Motion remain still; animation never marks an update read.
    Broken: working alone increments attention or a palette disguises an error.
    Affected: people deciding what needs review.

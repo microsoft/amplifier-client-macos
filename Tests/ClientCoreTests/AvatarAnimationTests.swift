@@ -51,6 +51,38 @@ final class AvatarAnimationTests: XCTestCase {
         XCTAssertEqual(p.state, .offline)
         XCTAssertFalse(p.animates(at: 12, visible: true, reducedMotion: false))
     }
+    func testUnreadReactionReturnsToOngoingWorkWithoutClearingAttention() {
+        for kind in ["completion", "session-error"] {
+            var p = AvatarPlayback()
+            let attention = item(kind)
+            p.update(connected: true, connecting: false, working: 2, items: [], scope: "host", now: 10)
+            p.update(connected: true, connecting: false, working: 2, items: [attention], scope: "host", now: 12)
+            let attentionState = p.state
+            XCTAssertEqual(p.presentation(at: 15.99).state, attentionState)
+            XCTAssertEqual(p.presentation(at: 16).state, .working)
+            XCTAssertEqual(p.presentation(at: 16).elapsed, 6, "Working clock survives the reaction")
+            XCTAssertTrue(p.animates(at: 16, visible: true, reducedMotion: false))
+            p.update(connected: true, connecting: false, working: 1, items: [attention], scope: "host", now: 20)
+            XCTAssertEqual(p.state, attentionState, "Unread/error meaning is preserved")
+            XCTAssertEqual(p.presentation(at: 20).state, .working, "Polling must not replay the reaction")
+            XCTAssertEqual(p.presentation(at: 20).elapsed, 10)
+            XCTAssertFalse(p.animates(at: 20, visible: false, reducedMotion: false))
+            XCTAssertFalse(p.animates(at: 20, visible: true, reducedMotion: true))
+            p.update(connected: true, connecting: false, working: 0, items: [attention], scope: "host", now: 21)
+            XCTAssertEqual(p.presentation(at: 21).state, attentionState)
+            XCTAssertFalse(p.animates(at: 21, visible: true, reducedMotion: false))
+            p.update(connected: true, connecting: false, working: 1, items: [attention], scope: "host", now: 30)
+            XCTAssertEqual(p.presentation(at: 30).state, .working, "New work must animate with old unread items")
+            XCTAssertEqual(p.presentation(at: 30).elapsed, 0)
+            p.update(connected: true, connecting: false, working: 1, items: [item(kind, "v2")], scope: "host", now: 31)
+            XCTAssertEqual(p.presentation(at: 31).state, attentionState, "A new event still reacts once")
+            XCTAssertEqual(p.presentation(at: 35).state, .working)
+            XCTAssertEqual(p.presentation(at: 35).elapsed, 5)
+            p.update(connected: false, connecting: false, working: 1, items: [attention], scope: "host", now: 36)
+            XCTAssertEqual(p.presentation(at: 36).state, .offline)
+            XCTAssertFalse(p.animates(at: 36, visible: true, reducedMotion: false))
+        }
+    }
     func testSavedShapeMigration() {
         XCTAssertEqual(AvatarCatalog.shapes.count, 6)
         XCTAssertEqual(AvatarCatalog.canonical("arc"), "d20")
