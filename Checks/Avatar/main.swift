@@ -13,6 +13,20 @@ MainActor.assumeIsolated {
     window.isOpaque = false; window.backgroundColor = .clear
     let sprite = SpriteView(frame: NSRect(x: 0, y: 0, width: 320, height: 320)); window.contentView = sprite
     window.orderFrontRegardless()
+    @MainActor func render() -> NSBitmapImageRep {
+        // Draw the current frame into an explicit AppKit bitmap context. An
+        // offscreen window's cached display can remain unchanged on CI hosts.
+        let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 320, pixelsHigh: 320,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 1280, bitsPerPixel: 32)!
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)!
+        NSGraphicsContext.current!.cgContext.clear(sprite.bounds)
+        sprite.draw(sprite.bounds)
+        NSGraphicsContext.restoreGraphicsState()
+        precondition((0..<320).contains { y in (0..<320).contains { x in bitmap.colorAt(x: x, y: y)!.alphaComponent > 0 } }, "Rendered artwork must not be blank")
+        return bitmap
+    }
     for finish in ["clear", "dark"] {
         for shape in AvatarCatalog.shapes {
             let resource = AvatarAppearance.resourceName(shape, finish: finish)
@@ -43,8 +57,7 @@ MainActor.assumeIsolated {
                               working: state == .working ? 1 : 0, items: attention, scope: resource)
                 precondition(sprite.playback.state == state)
                 sprite.previewElapsed = 0.65
-                let bitmap = sprite.bitmapImageRepForCachingDisplay(in: sprite.bounds)!
-                sprite.cacheDisplay(in: sprite.bounds, to: bitmap)
+                let bitmap = render()
                 // Transparent corners must survive native composition.
                 precondition(bitmap.colorAt(x: 0, y: 0)!.alphaComponent == 0)
                 precondition(sprite.visibleArtworkBounds.width > 40)
@@ -61,8 +74,7 @@ MainActor.assumeIsolated {
                 var rendered: [Data] = []
                 for elapsed in [6.05, 6.35] {
                     sprite.previewElapsed = elapsed
-                    let bitmap = sprite.bitmapImageRepForCachingDisplay(in: sprite.bounds)!
-                    sprite.cacheDisplay(in: sprite.bounds, to: bitmap)
+                    let bitmap = render()
                     rendered.append(bitmap.representation(using: .png, properties: [:])!)
                 }
                 precondition(rendered[0] != rendered[1], "\(resource) must animate with unread \(kind)")
