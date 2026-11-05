@@ -79,3 +79,11 @@ reviewed revisions before implementation. Update the relevant evidence row after
 checks, retaining failed/skipped observations and the resulting work item.
 Keep identifiers stable; do not renumber an established clause to reuse its meaning.
 Version/adoption and deployment remain separate from merging documentation.
+
+## Avatar-family successor
+
+The MP2/MP3 avatar update replaces the retired Arc/Chord choices, adds six-shape
+Clear/Dark animation coverage, and makes attention reactions host-driven and
+one-shot. See [avatar release readiness](avatar-release-readiness.md) for its
+source/native evidence and the still-separate signed-candidate gates. E2/E3 above
+remain evidence for 0.1.0; they are not relabeled as qualification of this change.

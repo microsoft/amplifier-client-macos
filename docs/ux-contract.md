@@ -27,7 +27,7 @@ services; quitting Amplifier stops the client.
 ## Direct choices
 
 - Expose the eight color swatches and the Clear / Dark avatar finishes. Each selection takes one action from Appearance, applies immediately to every preview and the avatar, and retains a visible and accessible selected state. Clear is the default; the interface itself follows macOS appearance.
-- Keep six shapes in a three-by-two grid: Relay, Accord, Arc, Crest, Chord, Meter. New installations use blue Relay.
+- Keep six shapes in a three-by-two grid: Relay, Accord, d20, Crest, Meter, Clippy. New installations use blue Relay.
 - Apply reversible preferences immediately. Connection fields remain drafts until Connect; credentials and external effects do not gain automatic submission merely to save a click.
 - Use disclosure for large chat lists and uncommon diagnostics. Count complete journeys, including opening menus and saving; compare clarity and keyboard use as well as pointer actions.
 
@@ -141,3 +141,7 @@ credential. Forget requires confirmation naming the saved host, deletes only its
 local Keychain credential, and preserves messages and preferences. Explain that
 host revocation is separate. Refuse connection changes while a message is being
 sent or awaiting startup delivery; never silently retarget a pending message.
+
+The approved family and its state-specific light/motion behavior are specified in
+[Avatar family and motion](avatar-animation.md). Completion/error reactions are
+one-shot and do not restart on polling. Reduce Motion retains a still status pose.

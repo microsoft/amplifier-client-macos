@@ -1,90 +1,143 @@
 #if os(macOS)
 import AppKit
+import ImageIO
+#if !NATIVE_CHECK
 import ClientCore
+#endif
 
 @MainActor final class SpriteView: NSView {
-    var motion = Motion.waiting
     var open: (() -> Void)?
-    private var frames: [[NSImage]] = []
+    #if NATIVE_CHECK
+    var previewElapsed: Double?
+    #endif
+    private(set) var playback = AvatarPlayback()
+    private var frames: [CGImage] = []
+    private var working: CGImageSource?
+    private var workingEnds: [Double] = []
+    private var cache = NSCache<NSNumber, CGImage>()
     private var timer: Timer?
-    private var tick = 0
-    private var shape = ""
-    private var palette = ""
+    private var enabled = false
+    private var shape = "relay"
+    private var resource = ""
+    private var palette = "blue"
     private var ink = NSRect(x: 0, y: 0, width: 1, height: 1)
-    private var sculpted: NSImage?
+    private var accessibilityObserver: NSObjectProtocol?
     override var isOpaque: Bool { false }
     override var mouseDownCanMoveWindow: Bool { false }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-
-    func load(_ name: String, palette: String = "blue", finish: String = "clear") {
-        let name = AvatarAppearance.resourceName(name, finish: finish)
-        guard shape != name || self.palette != palette else { return }
-        guard let url = Bundle.module.url(forResource: name, withExtension: "png", subdirectory: "Resources"),
-              let original = NSImage(contentsOf: url)?.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
-        let source = AvatarAppearance.colored(original, palette: palette)
-        let reference = source.width == 1536 && source.height == 2288
-            ? source.cropping(to: CGRect(x: 0, y: 0, width: 192, height: 208))! : source
-        ink = AvatarAppearance.inkBounds(reference)
-        shape = name; self.palette = palette
-        if source.width != 1536 || source.height != 2288 {
-            sculpted = NSImage(cgImage: source, size: NSSize(width: source.width, height: source.height))
-            frames = []; needsDisplay = true; return
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        cache.countLimit = 12; cache.totalCostLimit = 5 * 1024 * 1024
+        accessibilityObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in MainActor.assumeIsolated { self?.refreshTimer(); self?.needsDisplay = true } }
+        setAccessibilityElement(true); setAccessibilityRole(.image)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    deinit {
+        timer?.invalidate()
+        if let accessibilityObserver { NSWorkspace.shared.notificationCenter.removeObserver(accessibilityObserver) }
+    }
+    func update(connected: Bool, connecting: Bool, working: Int, items: [AttentionItem], scope: String) {
+        playback.update(connected: connected, connecting: connecting, working: working,
+                        items: items, scope: scope, now: ProcessInfo.processInfo.systemUptime)
+        setAccessibilityLabel("\(shape == "d20" ? "d20" : shape.capitalized), \(playback.state.label)")
+        refreshTimer(); needsDisplay = true
+    }
+    func load(_ name: String, palette: String = "blue", finish: String = "clear", directory: URL? = nil) {
+        let canonical = AvatarCatalog.canonical(name)
+        let resource = AvatarAppearance.resourceName(canonical, finish: finish)
+        guard self.resource != resource || self.palette != palette else { return }
+        let base: URL?
+        #if NATIVE_CHECK
+        base = directory
+        #else
+        base = directory ?? Bundle.module.url(forResource: resource, withExtension: "png", subdirectory: "Resources")?.deletingLastPathComponent()
+        #endif
+        guard let base, let original = NSImage(contentsOf: base.appendingPathComponent(resource + ".png"))?.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+        let count = AvatarCatalog.frameCount(canonical)
+        guard original.width == 1280, original.height == 320*((count+3)/4) else { return }
+        let colored = AvatarAppearance.colored(original, palette: palette)
+        frames = (0..<count).compactMap { colored.cropping(to: CGRect(x: ($0%4)*320, y: ($0/4)*320, width: 320, height: 320)) }
+        ink = AvatarAppearance.inkBounds(frames[AvatarCatalog.quietFrame(canonical)])
+        working = nil
+        if !["relay", "meter"].contains(canonical) {
+            working = CGImageSourceCreateWithURL(base.appendingPathComponent(resource + "-working.png") as CFURL,
+                                            [kCGImageSourceShouldCache: false] as CFDictionary)
         }
-        sculpted = nil
-        frames = (0..<11).map { row in
-            (0..<8).compactMap { column in
-                source.cropping(to: CGRect(x: column * 192, y: row * 208, width: 192, height: 208))
-                    .map { NSImage(cgImage: $0, size: NSSize(width: 192, height: 208)) }
+        workingEnds = []; var duration = 0.0
+        if let working {
+            for i in 0..<CGImageSourceGetCount(working) {
+                let properties = CGImageSourceCopyPropertiesAtIndex(working, i, nil) as? [CFString: Any]
+                let png = properties?[kCGImagePropertyPNGDictionary] as? [CFString: Any]
+                duration += max(0.01, (png?[kCGImagePropertyAPNGUnclampedDelayTime] as? Double) ??
+                    (png?[kCGImagePropertyAPNGDelayTime] as? Double) ?? 1.0/48)
+                workingEnds.append(duration)
             }
         }
-        shape = name; needsDisplay = true
-    }
-    var visibleArtworkBounds: NSRect {
-        var rect = bounds
-        if let sculpted {
-            let ratio = min(bounds.width / sculpted.size.width, bounds.height / sculpted.size.height)
-            let size = NSSize(width: sculpted.size.width * ratio, height: sculpted.size.height * ratio)
-            rect = NSRect(x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2, width: size.width, height: size.height)
-        }
-        return NSRect(x: rect.minX + ink.minX * rect.width, y: rect.minY + ink.minY * rect.height,
-            width: ink.width * rect.width, height: ink.height * rect.height).insetBy(dx: 0, dy: -3)
-    }
-    func animate(_ enabled: Bool) {
-        timer?.invalidate(); timer = nil
-        guard enabled else { return }
-        timer = Timer.scheduledTimer(withTimeInterval: 0.14, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.tick += 1; self?.needsDisplay = true }
-        }
+        cache.removeAllObjects(); shape = canonical; self.resource = resource; self.palette = palette
+        setAccessibilityLabel("\(shape == "d20" ? "d20" : shape.capitalized), \(playback.state.label)")
         needsDisplay = true
     }
+    var visibleArtworkBounds: NSRect {
+        let side = min(bounds.width, bounds.height)
+        let rect = NSRect(x: bounds.midX-side/2, y: bounds.midY-side/2, width: side, height: side)
+        return NSRect(x: rect.minX+ink.minX*side, y: rect.minY+ink.minY*side,
+                      width: ink.width*side, height: ink.height*side).insetBy(dx: 0, dy: -3)
+    }
+    func animate(_ enabled: Bool) { self.enabled = enabled; refreshTimer(); needsDisplay = true }
+    private func refreshTimer() {
+        let shouldRun = playback.animates(at: ProcessInfo.processInfo.systemUptime, visible: enabled,
+            reducedMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+        if !shouldRun { timer?.invalidate(); timer = nil; return }
+        guard timer == nil else { return }
+        let timer = Timer(timeInterval: 1.0/50, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.needsDisplay = true; self?.refreshTimer() }
+        }
+        timer.tolerance = 0.002
+        RunLoop.main.add(timer, forMode: .common); self.timer = timer
+    }
+    private func workingFrame(at elapsed: Double) -> CGImage? {
+        guard let working, let duration = workingEnds.last, duration > 0 else { return nil }
+        let phase = elapsed.truncatingRemainder(dividingBy: duration)
+        let index = workingEnds.firstIndex { $0 > phase } ?? 0, key = NSNumber(value: index)
+        if let image = cache.object(forKey: key) { return image }
+        guard let source = CGImageSourceCreateImageAtIndex(working, index, [kCGImageSourceShouldCache: false] as CFDictionary) else { return nil }
+        let image = AvatarAppearance.colored(source, palette: palette)
+        cache.setObject(image, forKey: key, cost: image.bytesPerRow*image.height)
+        return image
+    }
     override func draw(_ dirtyRect: NSRect) {
-        if let sculpted {
-            let reduced = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-            let phase = Double(tick) * (motion == .idle ? 0.16 : 0.32)
-            let rise = reduced ? 0 : CGFloat(sin(phase)) * (motion == .idle ? 1.0 : 2.5)
-            let ratio = min(bounds.width / sculpted.size.width, bounds.height / sculpted.size.height)
-            let size = NSSize(width: sculpted.size.width * ratio, height: sculpted.size.height * ratio)
-            sculpted.draw(in: NSRect(x: bounds.midX - size.width/2, y: bounds.midY - size.height/2 + rise, width: size.width, height: size.height))
-            return
-        }
-        guard frames.count == 11 else { return }
+        guard !frames.isEmpty, let context = NSGraphicsContext.current?.cgContext else { return }
         let reduced = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        var row = motion.rawValue, column = reduced ? 0 : tick % motion.count
-        if !reduced, motion == .idle, let window {
-            let cursor = NSEvent.mouseLocation
-            let dx = cursor.x - window.frame.midX, dy = cursor.y - window.frame.midY
-            let distance = hypot(dx, dy)
-            if distance > 100 && distance < 500 {
-                let angle = atan2(dx, dy) + 2 * Double.pi
-                let direction = Int((angle / (2 * Double.pi) * 16).rounded()) % 16
-                row = 9 + direction / 8; column = direction % 8
-            }
+        var elapsed = playback.elapsed(at: ProcessInfo.processInfo.systemUptime)
+        #if NATIVE_CHECK
+        elapsed = previewElapsed ?? elapsed
+        #endif
+        context.saveGState(); defer { context.restoreGState() }
+        let side = min(bounds.width, bounds.height)
+        context.translateBy(x: bounds.midX-side/2, y: bounds.midY-side/2)
+        context.scaleBy(x: side/320, y: side/320); context.interpolationQuality = .high
+        let rect = CGRect(x: 0, y: 0, width: 320, height: 320)
+        if playback.state == .working, !reduced, let frame = workingFrame(at: elapsed) { context.draw(frame, in: rect); return }
+        let pose = AvatarPose.sample(shape: shape, state: playback.state, elapsed: elapsed, reduced: reduced)
+        let pivotY: CGFloat = shape == "d20" ? 160 : (shape == "meter" && playback.state == .working ? 28 : 60)
+        context.translateBy(x: 160, y: pivotY + pose.rise)
+        // Choreography uses image coordinates (downward Y); AppKit uses upward Y.
+        context.rotate(by: -pose.tilt * .pi/180)
+        context.scaleBy(x: pose.scaleX, y: pose.scaleY)
+        context.translateBy(x: -160, y: -pivotY)
+        // Add weighted premultiplied layers in an isolated transparent group.
+        // Source-over crossfades would thin the silhouette halfway through.
+        context.beginTransparencyLayer(auxiliaryInfo: nil)
+        context.setBlendMode(.plusLighter)
+        for (index, weight) in pose.weights.enumerated() where weight > 0 {
+            context.setAlpha(weight); context.draw(frames[index], in: rect)
         }
-        frames[row][column].draw(in: bounds)
+        context.endTransparencyLayer()
     }
     override func mouseDown(with event: NSEvent) {
-        if event.clickCount == 2 { open?() }
-        else { window?.performDrag(with: event) }
+        if event.clickCount == 2 { open?() } else { window?.performDrag(with: event) }
     }
 }
 #endif

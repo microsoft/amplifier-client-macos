@@ -1,106 +1,200 @@
 {
-  "mode": "built-in image_gen",
-  "prompts": {
-    "accord": "Create a production-ready transparent PNG desktop-avatar asset extracted and refined from the reference design 05 Accord, bottom middle: three staggered upright crystal organ-pipe blocks, central tallest, cohesive compact stepped sculpture. One sculpture only, straight-on three-quarter presentation exactly like that reference item. Preserve its recognizable silhouette and glossy faceted clear/white glass. Lights and saturated reflections must be electric BLUE and CYAN ONLY for runtime palette remapping. Preserve neutral clear glass facets. No face, no limbs, no eyes, no text, no labels, no other candidates, no ground plane or floor, no cast shadow, no background gradient, no opaque rectangle: genuine transparent alpha background. Single centered sculpture occupying 80% of width and 82% height inside a square image, all extremities in frame. Beautiful premium optical glass, small-scale readable silhouette. Not a sheet or collage.",
-    "meter": "Create a production-ready transparent PNG desktop-avatar asset extracted and refined from the reference design 04 Meter, bottom left: compact upright rectangular crystal prism with three stacked diagonal luminous bands like an equalizer. One sculpture only, straight-on three-quarter presentation exactly like that reference item. Preserve its recognizable silhouette and glossy faceted clear/white glass. Lights and saturated reflections must be electric BLUE and CYAN ONLY for runtime palette remapping. Preserve neutral clear glass facets. No face, no limbs, no eyes, no text, no labels, no other candidates, no ground plane or floor, no cast shadow, no background gradient, no opaque rectangle: genuine transparent alpha background. Single centered sculpture occupying 80% of width and 82% height inside a square image, all extremities in frame. Beautiful premium optical glass, small-scale readable silhouette. Not a sheet or collage.",
-    "chord": "Create a production-ready transparent PNG desktop-avatar asset extracted and refined from the reference design 03 Chord, top right: three upright unequal crystal towers with flowing curved glass ribbons smoothly joining their bases. One sculpture only, straight-on three-quarter presentation exactly like that reference item. Preserve its recognizable silhouette and glossy faceted clear/white glass. Lights and saturated reflections must be electric BLUE and CYAN ONLY for runtime palette remapping. Preserve neutral clear glass facets. No face, no limbs, no eyes, no text, no labels, no other candidates, no ground plane or floor, no cast shadow, no background gradient, no opaque rectangle: genuine transparent alpha background. Single centered sculpture occupying 80% of width and 82% height inside a square image, all extremities in frame. Beautiful premium optical glass, small-scale readable silhouette. Not a sheet or collage."
-  },
-  "darkGlass": {
-    "mode": "built-in image_gen",
-    "motion": "Native floating motion with Reduce Motion support",
-    "prompts": {
-      "relay": "Use case: background-extraction. Production transparent PNG desktop-avatar asset. Reference image is the original approved DARK GLASS concept board. Extract and refine ONE sculpture only: bottom row Relay: compact triangular knot of three broad straight faceted prisms, small triangular opening, same chirality. Use BLUE column as exact shape/material reference. Dark obsidian/smoked charcoal glass, faceted black and dark graphite body with narrow neutral silver edge highlights and electric blue/cyan internal luminous channels, as in the reference. Keep silhouette, proportions, viewpoint and identity. Center the single sculpture in a square transparent canvas with consistent 12% clear padding around it. Object occupies about 76% of canvas. Genuine transparent alpha everywhere outside the sculpture INCLUDING its central hole where applicable. No backdrop, no checkerboard painted in, no floor/reflection or cast shadow, no external halo, no text or labels, no frame, no grid or other objects, no eyes/face/limbs. Preserve the DARK body, don't turn it into clear white glass. Only BLUE and CYAN saturated lights for runtime color remapping. The output is one isolated ready-to-use asset, not a concept board.",
-      "accord": "Use case: background-extraction. Production transparent PNG desktop-avatar asset. Reference image is the original approved DARK GLASS concept board. Extract and refine ONE sculpture only: middle row Accord: compact three staggered upright polygonal glass organ-pipe blocks, center tallest. Use BLUE column as exact shape/material reference. Dark obsidian/smoked charcoal glass, faceted black and dark graphite body with narrow neutral silver edge highlights and electric blue/cyan internal luminous channels, as in the reference. Keep silhouette, proportions, viewpoint and identity. Center the single sculpture in a square transparent canvas with consistent 12% clear padding around it. Object occupies about 76% of canvas. Genuine transparent alpha everywhere outside the sculpture INCLUDING its central hole where applicable. No backdrop, no checkerboard painted in, no floor/reflection or cast shadow, no external halo, no text or labels, no frame, no grid or other objects, no eyes/face/limbs. Preserve the DARK body, don't turn it into clear white glass. Only BLUE and CYAN saturated lights for runtime color remapping. The output is one isolated ready-to-use asset, not a concept board.",
-      "meter": "Use case: background-extraction. Production transparent PNG desktop-avatar asset. Reference image is the original approved DARK GLASS concept board. Extract and refine ONE sculpture only: top row Meter: upright rectangular faceted prism with three diagonal luminous bands. Use BLUE column as exact shape/material reference. Dark obsidian/smoked charcoal glass, faceted black and dark graphite body with narrow neutral silver edge highlights and electric blue/cyan internal luminous channels, as in the reference. Keep silhouette, proportions, viewpoint and identity. Center the single sculpture in a square transparent canvas with consistent 12% clear padding around it. Object occupies about 76% of canvas. Genuine transparent alpha everywhere outside the sculpture INCLUDING its central hole where applicable. No backdrop, no checkerboard painted in, no floor/reflection or cast shadow, no external halo, no text or labels, no frame, no grid or other objects, no eyes/face/limbs. Preserve the DARK body, don't turn it into clear white glass. Only BLUE and CYAN saturated lights for runtime color remapping. The output is one isolated ready-to-use asset, not a concept board.",
-      "arc": "Use case: background-extraction. Production transparent PNG desktop-avatar asset. Reference image is the original approved DARK GLASS concept board. Extract and refine ONE sculpture only: bottom row Arc: rounded triangular continuous flowing glass swirl around circular central opening. Use BLUE column as exact shape/material reference. Dark obsidian/smoked charcoal glass, faceted black and dark graphite body with narrow neutral silver edge highlights and electric blue/cyan internal luminous channels, as in the reference. Keep silhouette, proportions, viewpoint and identity. Center the single sculpture in a square transparent canvas with consistent 12% clear padding around it. Object occupies about 76% of canvas. Genuine transparent alpha everywhere outside the sculpture INCLUDING its central hole where applicable. No backdrop, no checkerboard painted in, no floor/reflection or cast shadow, no external halo, no text or labels, no frame, no grid or other objects, no eyes/face/limbs. Preserve the DARK body, don't turn it into clear white glass. Only BLUE and CYAN saturated lights for runtime color remapping. The output is one isolated ready-to-use asset, not a concept board.",
-      "chord": "Use case: background-extraction. Production transparent PNG desktop-avatar asset. Reference image is the original approved DARK GLASS concept board. Extract and refine ONE sculpture only: top row Chord: three staggered glass towers joined by sweeping flowing ribbons along base. Use BLUE column as exact shape/material reference. Dark obsidian/smoked charcoal glass, faceted black and dark graphite body with narrow neutral silver edge highlights and electric blue/cyan internal luminous channels, as in the reference. Keep silhouette, proportions, viewpoint and identity. Center the single sculpture in a square transparent canvas with consistent 12% clear padding around it. Object occupies about 76% of canvas. Genuine transparent alpha everywhere outside the sculpture INCLUDING its central hole where applicable. No backdrop, no checkerboard painted in, no floor/reflection or cast shadow, no external halo, no text or labels, no frame, no grid or other objects, no eyes/face/limbs. Preserve the DARK body, don't turn it into clear white glass. Only BLUE and CYAN saturated lights for runtime color remapping. The output is one isolated ready-to-use asset, not a concept board.",
-      "crest": "Use case: background-extraction. Production transparent PNG desktop-avatar asset. Reference image is the original approved DARK GLASS concept board. Extract and refine ONE sculpture only: middle row Crest: upright curling single ocean-wave/crescent, curled upper tip and smaller lower curl. Use BLUE column as exact shape/material reference. Dark obsidian/smoked charcoal glass, faceted black and dark graphite body with narrow neutral silver edge highlights and electric blue/cyan internal luminous channels, as in the reference. Keep silhouette, proportions, viewpoint and identity. Center the single sculpture in a square transparent canvas with consistent 12% clear padding around it. Object occupies about 76% of canvas. Genuine transparent alpha everywhere outside the sculpture INCLUDING its central hole where applicable. No backdrop, no checkerboard painted in, no floor/reflection or cast shadow, no external halo, no text or labels, no frame, no grid or other objects, no eyes/face/limbs. Preserve the DARK body, don't turn it into clear white glass. Only BLUE and CYAN saturated lights for runtime color remapping. The output is one isolated ready-to-use asset, not a concept board."
+  "generator": "image_gen; user-selected crystal family, November 2026",
+  "packaging": "Registered transparent 320px pose atlases; 256px APNG for motion-compensated working loops. Relay/Meter use continuous native interpolation. Clear/Dark are independently generated variants; choreography is shared.",
+  "assets": {
+    "accord-dark-working.png": {
+      "sha256": "709da2d5cdb2fc6807bdad4bd0a564615465d4a66f9a86144e1c97bebf462590",
+      "size": [
+        256,
+        256
+      ],
+      "frames": 173,
+      "bytes": 9816511
     },
-    "assets": [
-      {
-        "name": "relay",
-        "size": [
-          1254,
-          1254
-        ],
-        "visibleAlphaBounds": [
-          126,
-          136,
-          1158,
-          1103
-        ],
-        "sha256": "209b9ac9db8887e2e7d3117a0e0efe0ce88d2f395c747571396f623ee55848fa"
-      },
-      {
-        "name": "accord",
-        "size": [
-          1254,
-          1254
-        ],
-        "visibleAlphaBounds": [
-          274,
-          97,
-          1059,
-          1204
-        ],
-        "sha256": "ae6faceb93fc60a89cde19d96cbce05c1d7f78d9cc0483c7255e9292aee44be6"
-      },
-      {
-        "name": "meter",
-        "size": [
-          1254,
-          1254
-        ],
-        "visibleAlphaBounds": [
-          265,
-          116,
-          985,
-          1139
-        ],
-        "sha256": "1abcbe8aa7a25cc1806788753f2c05317d92efed90e7d191056e0de7815629b8"
-      },
-      {
-        "name": "arc",
-        "size": [
-          1254,
-          1254
-        ],
-        "visibleAlphaBounds": [
-          92,
-          88,
-          1172,
-          1146
-        ],
-        "sha256": "b35cd75d55c97c291246f4633cf8872d6db00f3d21c7719bec0ba7b2e35c8585"
-      },
-      {
-        "name": "chord",
-        "size": [
-          1254,
-          1254
-        ],
-        "visibleAlphaBounds": [
-          202,
-          112,
-          1146,
-          1153
-        ],
-        "sha256": "117b961812753eba0fdda0ffc877be9140f6b60aec4332a63ced44720306901a"
-      },
-      {
-        "name": "crest",
-        "size": [
-          1254,
-          1254
-        ],
-        "visibleAlphaBounds": [
-          142,
-          92,
-          1112,
-          1176
-        ],
-        "sha256": "3f058e796658e633d9321310faa5592ad172e307a18dac42597eff44c9f90f06"
-      }
-    ]
+    "accord-dark.png": {
+      "sha256": "7abb37b887b080b4bf40ec7456f187992c45c54e756fcaf708123d39fe4cd69e",
+      "size": [
+        1280,
+        640
+      ],
+      "frames": 1,
+      "bytes": 658690
+    },
+    "accord-working.png": {
+      "sha256": "a2e132fc1fca0c8d08cd416f0c4e8a292ab998707d63f2dbe1443ae09ac6f88d",
+      "size": [
+        256,
+        256
+      ],
+      "frames": 173,
+      "bytes": 11233912
+    },
+    "accord.png": {
+      "sha256": "a0c8601f764f93703efe3a8f55ca8fd657565ab6cd97e4101ef1e8304d85ae57",
+      "size": [
+        1280,
+        640
+      ],
+      "frames": 1,
+      "bytes": 778972
+    },
+    "clippy-dark-working.png": {
+      "sha256": "ac7d481f7763902e5e0d6dfb900d3202c039a16038e4387323b3a6c84fc2464b",
+      "size": [
+        256,
+        256
+      ],
+      "frames": 192,
+      "bytes": 12434173
+    },
+    "clippy-dark.png": {
+      "sha256": "03bf5dcc3cb83d742f1f176c92698073f7905ae004a9cb3a4ca8179df24c334e",
+      "size": [
+        1280,
+        640
+      ],
+      "frames": 1,
+      "bytes": 756518
+    },
+    "clippy-working.png": {
+      "sha256": "6d8b6683e06731d62e7db1cfd1a60bee2190b81a35c03155bf4f98a72b6d717a",
+      "size": [
+        256,
+        256
+      ],
+      "frames": 192,
+      "bytes": 13601848
+    },
+    "clippy.png": {
+      "sha256": "0bccdb482995112f459085141dd81908671f65e89b8ae5e6fbf9fd131d3b40fb",
+      "size": [
+        1280,
+        640
+      ],
+      "frames": 1,
+      "bytes": 850517
+    },
+    "crest-dark-working.png": {
+      "sha256": "fa407b92aca6a0f3d26d689deae5b939116c99065d1923c24fe3b706fd1b748e",
+      "size": [
+        256,
+        256
+      ],
+      "frames": 230,
+      "bytes": 18823372
+    },
+    "crest-dark.png": {
+      "sha256": "af0359ea4d094710711590b2a4dc81499b8240cfc754c0cf9f5328140e6a5463",
+      "size": [
+        1280,
+        1280
+      ],
+      "frames": 1,
+      "bytes": 1907982
+    },
+    "crest-working.png": {
+      "sha256": "86df42afc9a733b8048e39606dcbef49ce661c8c0e0b0e640fdaf3d14ae6d42d",
+      "size": [
+        256,
+        256
+      ],
+      "frames": 230,
+      "bytes": 21215217
+    },
+    "crest.png": {
+      "sha256": "ee58fc4e33847bff941c01d4d5fe3344401c7e33c73c5e4dde6881bad2d6aaa2",
+      "size": [
+        1280,
+        1280
+      ],
+      "frames": 1,
+      "bytes": 2238376
+    },
+    "d20-dark-working.png": {
+      "sha256": "56ab9bd7b3166bdca5bf6b431605f9c2493a479ef3d6029cc67914e2ce311ae7",
+      "size": [
+        256,
+        256
+      ],
+      "frames": 230,
+      "bytes": 15832051
+    },
+    "d20-dark.png": {
+      "sha256": "18a3e85f8b336d09a2ecef0a9cf3221faeb885d7cd20ff8d509976e09b243f32",
+      "size": [
+        1280,
+        1280
+      ],
+      "frames": 1,
+      "bytes": 1650152
+    },
+    "d20-working.png": {
+      "sha256": "33baeb2aff29815597814bacc6da30d495e2504d63519ae7e258dacef384722d",
+      "size": [
+        256,
+        256
+      ],
+      "frames": 230,
+      "bytes": 18458145
+    },
+    "d20.png": {
+      "sha256": "f1f38030ac59bc1d771c984288f4dbb604b78244c54a941e8a7bb68facd940d0",
+      "size": [
+        1280,
+        1280
+      ],
+      "frames": 1,
+      "bytes": 1956679
+    },
+    "meter-dark.png": {
+      "sha256": "4771c0645d9957c1f4fb2c182c2945e1feb0082a3f2c79e8fa7c98c122a5387b",
+      "size": [
+        1280,
+        1280
+      ],
+      "frames": 1,
+      "bytes": 1933688
+    },
+    "meter.png": {
+      "sha256": "bafcfda118b1e3fb1a8ccbbbfc408492e65a445a0fee8d594d5cf4154354bfb6",
+      "size": [
+        1280,
+        1280
+      ],
+      "frames": 1,
+      "bytes": 2157283
+    },
+    "relay-dark.png": {
+      "sha256": "5129820c7e5bb3d71e231d6dbe07362976b708f54a7c1338a1d128d1474ff095",
+      "size": [
+        1280,
+        640
+      ],
+      "frames": 1,
+      "bytes": 657851
+    },
+    "relay.png": {
+      "sha256": "613f0a1373c31e2a9b020a21aaabbd740c3036e1e5077e0a30855fdfad51ffcc",
+      "size": [
+        1280,
+        640
+      ],
+      "frames": 1,
+      "bytes": 762609
+    }
+  },
+  "approvedSourceSheets": {
+    "relay-dark": "0af8b51ce283d5c298a82f669e13512fe9507acc7860375a6f7fdd5b50244b04",
+    "accord-dark": "58b1458372ef25fe26192f0a39e0a7d57afffecd86b7a147e8f7e3cb8918ddac",
+    "d20-dark": "c1f7f7013f92bb3cd6c9c9b5ed29f4b40ca338790c5208b06f03f3f6731c240c",
+    "crest-dark": "d5830f21ad54504f2a9c5c4b407c6960c77dd7cf339de34f0057c729e6dc410e",
+    "meter-dark": "e4f04c06d960035889f4e27ee6e2fc3667e174f2c4f0496732c14347aed2ff21",
+    "clippy-dark": "9b27141f8678de1bd52369841073e9d5297eebd7acedc55209212b97c4b08024",
+    "relay": "a1a907ddf36481ec753f2b21d89d0c1530870e6657f43c75fa714b9f262db103",
+    "accord": "ee854ddb6815eb994996aeb55d2c5ba6d2fb582345f4f473eed17771f8936567",
+    "d20": "20b3ea753ff3411daa468b4990c590fd16dab0465bf6a7953151cac420c28b2d",
+    "crest": "196b0c88725b2ffcf52ca4bbb3ce3058283d3d6f8f1a4729bbba3aa306e90cdb",
+    "meter": "a6b21e70dd7c3f002134f38fa80d70f8e876603ef772c04cc04a5fd0de231940",
+    "clippy": "d389a53a2d612d365f9da0fed978098cbd15db3ec41b8718db759e9ee59ba7c0"
   }
 }

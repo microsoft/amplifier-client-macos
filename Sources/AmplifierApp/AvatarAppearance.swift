@@ -1,6 +1,9 @@
 #if os(macOS)
 import AppKit
 import CoreImage
+#if !NATIVE_CHECK
+import ClientCore
+#endif
 
 @MainActor enum AvatarAppearance {
     /// Unit ink bounds, with a bottom-left origin for AppKit layout. Ignore faint
@@ -25,9 +28,9 @@ import CoreImage
         }
         return found ?? NSRect(x: 0, y: 0, width: 1, height: 1)
     }
-    static let shapes = ["relay", "accord", "arc", "crest", "chord", "meter"]
+    static let shapes = AvatarCatalog.shapes
     static func resourceName(_ shape: String, finish: String) -> String {
-        let shape = shapes.contains(shape) ? shape : "relay"
+        let shape = AvatarCatalog.canonical(shape)
         return shape + (finish == "dark" ? "-dark" : "")
     }
     struct Palette {
@@ -52,6 +55,7 @@ import CoreImage
     /// luminance detail, alpha, and the original animation's geometry.
     static func colored(_ source: CGImage, palette id: String) -> CGImage {
         let selected = palette(id)
+        if selected.id == "blue" { return source }
         if cubes[selected.id] == nil {
             let n = 32
             var cube = [Float](); cube.reserveCapacity(n*n*n*4)
@@ -81,9 +85,10 @@ import CoreImage
         guard let output = filter.outputImage else { return source }
         return context.createCGImage(output, from: output.extent) ?? source
     }
-    static func thumbnail(_ source: CGImage, palette: String) -> NSImage {
-        let frame = source.width == 1536 && source.height == 2288
-            ? source.cropping(to: CGRect(x: 0, y: 0, width: 192, height: 208))! : source
+    static func thumbnail(_ source: CGImage, palette: String, shape: String = "relay") -> NSImage {
+        let quiet = AvatarCatalog.quietFrame(AvatarCatalog.canonical(shape))
+        let frame = source.width == 1280
+            ? source.cropping(to: CGRect(x: (quiet%4)*320, y: (quiet/4)*320, width: 320, height: 320))! : source
         // Cache actual thumbnail pixels, not full-size artwork with a small
         // logical size: exploring both finishes and all palettes stays bounded.
         let width = 156, height = 170

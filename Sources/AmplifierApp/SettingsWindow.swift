@@ -112,13 +112,13 @@ enum ConnectionAction { case pause, resume, forget }
             appearance.addSubview(button); swatches.append(button)
         }
         for (index, name) in AvatarAppearance.shapes.enumerated() {
-            let button = SelectionButton(title: name.capitalized, target: self, action: #selector(selectAvatar(_:)))
+            let button = SelectionButton(title: name == "d20" ? "d20" : name.capitalized, target: self, action: #selector(selectAvatar(_:)))
             button.identifier = NSUserInterfaceItemIdentifier(name)
             button.setButtonType(.pushOnPushOff); button.isBordered = false
             button.bezelStyle = .regularSquare
             button.frame = NSRect(x: CGFloat(index % 3 * 168), y: CGFloat(196 - index / 3 * 112), width: 156, height: 104)
             button.imagePosition = .imageAbove; button.imageScaling = .scaleProportionallyDown
-            button.font = .systemFont(ofSize: 12, weight: .medium); button.setAccessibilityLabel(name.capitalized + " avatar")
+            button.font = .systemFont(ofSize: 12, weight: .medium); button.setAccessibilityLabel((name == "d20" ? "d20" : name.capitalized) + " avatar")
             appearance.addSubview(button); avatars.append(button)
         }
         toggle("Show advanced menu options", detail: "Connection diagnostics in the menu bar menu.", key: "showAdvanced", y: 0, in: appearance)
