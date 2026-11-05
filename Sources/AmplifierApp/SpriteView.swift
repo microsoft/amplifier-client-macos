@@ -10,6 +10,7 @@ import ClientCore
     #if NATIVE_CHECK
     var previewElapsed: Double?
     var animationTimerIsRunning: Bool { timer != nil }
+    var previewReducedMotion: Bool? { didSet { refreshTimer(); needsDisplay = true } }
     #endif
     private(set) var playback = AvatarPlayback()
     private var frames: [CGImage] = []
@@ -23,6 +24,12 @@ import ClientCore
     private var palette = "blue"
     private var ink = NSRect(x: 0, y: 0, width: 1, height: 1)
     private var accessibilityObserver: NSObjectProtocol?
+    private var reducedMotion: Bool {
+        #if NATIVE_CHECK
+        if let previewReducedMotion { return previewReducedMotion }
+        #endif
+        return NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    }
     override var isOpaque: Bool { false }
     override var mouseDownCanMoveWindow: Bool { false }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
@@ -89,7 +96,7 @@ import ClientCore
     func animate(_ enabled: Bool) { self.enabled = enabled; refreshTimer(); needsDisplay = true }
     private func refreshTimer() {
         let shouldRun = playback.animates(at: ProcessInfo.processInfo.systemUptime, visible: enabled,
-            reducedMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+            reducedMotion: reducedMotion)
         if !shouldRun { timer?.invalidate(); timer = nil; return }
         guard timer == nil else { return }
         let timer = Timer(timeInterval: 1.0/50, repeats: true) { [weak self] _ in
@@ -110,7 +117,7 @@ import ClientCore
     }
     override func draw(_ dirtyRect: NSRect) {
         guard !frames.isEmpty, let context = NSGraphicsContext.current?.cgContext else { return }
-        let reduced = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let reduced = reducedMotion
         var now = ProcessInfo.processInfo.systemUptime
         #if NATIVE_CHECK
         if let previewElapsed { now += previewElapsed - playback.elapsed(at: now) }

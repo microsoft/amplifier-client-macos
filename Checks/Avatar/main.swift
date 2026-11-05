@@ -12,6 +12,9 @@ MainActor.assumeIsolated {
                          styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
     window.isOpaque = false; window.backgroundColor = .clear
     let sprite = SpriteView(frame: NSRect(x: 0, y: 0, width: 320, height: 320)); window.contentView = sprite
+    // Exercise both accessibility modes regardless of the runner's settings.
+    fputs("Native runner Reduce Motion: \(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)\n", stderr)
+    sprite.previewReducedMotion = false
     window.orderFrontRegardless()
     @MainActor func render() -> NSBitmapImageRep {
         // Draw the current frame into an explicit AppKit bitmap context. An
@@ -77,6 +80,10 @@ MainActor.assumeIsolated {
                     let bitmap = render()
                     rendered.append(bitmap.representation(using: .png, properties: [:])!)
                 }
+                if rendered[0] == rendered[1] {
+                    let now = ProcessInfo.processInfo.systemUptime
+                    fputs("Unchanged render: \(resource), \(kind), elapsed \(sprite.playback.elapsed(at: now)), presentation \(sprite.playback.presentation(at: now + 6.35 - sprite.playback.elapsed(at: now)))\n", stderr)
+                }
                 precondition(rendered[0] != rendered[1], "\(resource) must animate with unread \(kind)")
             }
             // Color/finish must not reset an event reaction or change its state.
@@ -97,9 +104,15 @@ MainActor.assumeIsolated {
         items: [AttentionItem(id: "timer", fingerprint: "1", sessionId: "sample", title: "Sample", kind: "session-error", summary: "Sample", pinned: false, agentCreated: false)], scope: "timer")
     sprite.animate(true)
     RunLoop.main.run(until: Date().addingTimeInterval(4.2))
-    if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-        precondition(sprite.animationTimerIsRunning, "Unread error must not stop the working timer")
-    }
+    precondition(sprite.animationTimerIsRunning, "Unread error must not stop the working timer")
+    sprite.previewReducedMotion = true
+    precondition(!sprite.animationTimerIsRunning, "Reduce Motion stops the working timer even with attention")
+    sprite.previewElapsed = 6.05
+    let reducedFirst = render().representation(using: .png, properties: [:])!
+    sprite.previewElapsed = 6.35
+    precondition(reducedFirst == render().representation(using: .png, properties: [:])!, "Reduce Motion keeps the attention pose still")
+    sprite.previewReducedMotion = false
+    precondition(sprite.animationTimerIsRunning)
     sprite.animate(false); window.orderOut(nil)
     precondition(!sprite.animationTimerIsRunning)
     print("PASS: \(renderCount) native state/finish/shape renders, 24 mixed attention/work animations, timer continuity, transparent corners, full working decode, eight palettes, reaction continuity")
