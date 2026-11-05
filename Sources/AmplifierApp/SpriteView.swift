@@ -9,6 +9,7 @@ import ClientCore
     var open: (() -> Void)?
     #if NATIVE_CHECK
     var previewElapsed: Double?
+    var animationTimerIsRunning: Bool { timer != nil }
     #endif
     private(set) var playback = AvatarPlayback()
     private var frames: [CGImage] = []
@@ -110,18 +111,21 @@ import ClientCore
     override func draw(_ dirtyRect: NSRect) {
         guard !frames.isEmpty, let context = NSGraphicsContext.current?.cgContext else { return }
         let reduced = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        var elapsed = playback.elapsed(at: ProcessInfo.processInfo.systemUptime)
+        var now = ProcessInfo.processInfo.systemUptime
         #if NATIVE_CHECK
-        elapsed = previewElapsed ?? elapsed
+        if let previewElapsed { now += previewElapsed - playback.elapsed(at: now) }
         #endif
+        let presentation = playback.presentation(at: now)
+        let state = reduced ? playback.state : presentation.state
+        let elapsed = reduced ? playback.elapsed(at: now) : presentation.elapsed
         context.saveGState(); defer { context.restoreGState() }
         let side = min(bounds.width, bounds.height)
         context.translateBy(x: bounds.midX-side/2, y: bounds.midY-side/2)
         context.scaleBy(x: side/320, y: side/320); context.interpolationQuality = .high
         let rect = CGRect(x: 0, y: 0, width: 320, height: 320)
-        if playback.state == .working, !reduced, let frame = workingFrame(at: elapsed) { context.draw(frame, in: rect); return }
-        let pose = AvatarPose.sample(shape: shape, state: playback.state, elapsed: elapsed, reduced: reduced)
-        let pivotY: CGFloat = shape == "d20" ? 160 : (shape == "meter" && playback.state == .working ? 28 : 60)
+        if state == .working, !reduced, let frame = workingFrame(at: elapsed) { context.draw(frame, in: rect); return }
+        let pose = AvatarPose.sample(shape: shape, state: state, elapsed: elapsed, reduced: reduced)
+        let pivotY: CGFloat = shape == "d20" ? 160 : (shape == "meter" && state == .working ? 28 : 60)
         context.translateBy(x: 160, y: pivotY + pose.rise)
         // Choreography uses image coordinates (downward Y); AppKit uses upward Y.
         context.rotate(by: -pose.tilt * .pi/180)

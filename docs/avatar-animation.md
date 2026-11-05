@@ -18,14 +18,19 @@ The complete, filtered host snapshot drives presentation. Priority is disconnect
 unread session error, input/approval request, unread completion, work, idle.
 Animation never acknowledges an item. Host read receipts remove attention.
 The pill keeps its existing semantic colors regardless of artwork palette.
+Attention priority chooses the initial reaction, not whether ongoing work can
+animate. After a ready/error reaction finishes, the avatar resumes its working
+loop if any chats are still working; the unread/error pill and badges remain.
+The working clock continues through reactions and repeated snapshots. With no
+ongoing work, the reaction settles into its still attention pose.
 
 | State | Motion / light |
 | --- | --- |
 | Idle | Six-second subtle breathing; Clippy occasionally blinks. |
 | Working | Relay circulates three sharp light seams; Accord coordinates column pulses; d20 rotates and breathes; Crest flexes with an additional lower light path; Meter varies its EQ levels over 7.2 seconds with a smooth breathing swell; Clippy remains attentive. |
-| Response ready | One sweep and small acknowledgment, then a steady pose. |
+| Response ready | One sweep and small acknowledgment, then resume ongoing work or settle into a steady pose. |
 | Needs input | Two soft pulses followed by a long rest, repeating every six seconds. |
-| Error | One brief recoil, then still; the red pill retains the error indication. |
+| Error | One brief recoil, then resume ongoing work or remain still; the red pill retains the error indication. |
 | Connecting | A measured searching light, distinct from working. |
 | Offline / paused | Still, without suggesting ongoing activity. |
 
@@ -51,8 +56,8 @@ Non-blue palettes reuse the native glass-preserving color transform. Blue keeps
 the approved colors unchanged. Settings cache small thumbnails rather than
 full animation loops. The crystal highlights remain neutral.
 
-Hidden avatars stop their draw timer. Offline and completed one-shot states
-also stop it. Reduce Motion switches immediately to a stable pose and suspends
+Hidden avatars stop their draw timer. Offline and completed one-shot states with
+no ongoing work also stop it. Reduce Motion switches immediately to a stable pose and suspends
 the timer; it does not hide status or change host activity. Artwork is an
 accessible image with the shape and current state in its label. Passive panels,
 first-click handling and drag behavior retain the existing nonactivating policy.

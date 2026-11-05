@@ -53,6 +53,20 @@ MainActor.assumeIsolated {
                 }
                 renderCount += 1
             }
+            // Real renderer must select the working atlas/APNG after a reaction,
+            // even though the host still reports unread attention.
+            for kind in ["completion", "session-error"] {
+                sprite.update(connected: true, connecting: false, working: 2,
+                    items: [AttentionItem(id: "mixed", fingerprint: kind, sessionId: "sample", title: "Sample", kind: kind, summary: "Sample", pinned: false, agentCreated: false)], scope: resource)
+                var rendered: [Data] = []
+                for elapsed in [6.05, 6.35] {
+                    sprite.previewElapsed = elapsed
+                    let bitmap = sprite.bitmapImageRepForCachingDisplay(in: sprite.bounds)!
+                    sprite.cacheDisplay(in: sprite.bounds, to: bitmap)
+                    rendered.append(bitmap.representation(using: .png, properties: [:])!)
+                }
+                precondition(rendered[0] != rendered[1], "\(resource) must animate with unread \(kind)")
+            }
             // Color/finish must not reset an event reaction or change its state.
             sprite.update(connected: true, connecting: false, working: 0,
                           items: [AttentionItem(id: "palette", fingerprint: "1", sessionId: "sample", title: "Sample", kind: "completion", summary: "Sample", pinned: false, agentCreated: false)], scope: resource)
@@ -63,6 +77,18 @@ MainActor.assumeIsolated {
             }
         }
     }
+    // Exercise the real timer crossing the one-shot deadline, not only sampled
+    // choreography. This runs in a synthetic offscreen native window.
+    sprite.load("relay", directory: resources)
+    sprite.previewElapsed = nil
+    sprite.update(connected: true, connecting: false, working: 1,
+        items: [AttentionItem(id: "timer", fingerprint: "1", sessionId: "sample", title: "Sample", kind: "session-error", summary: "Sample", pinned: false, agentCreated: false)], scope: "timer")
+    sprite.animate(true)
+    RunLoop.main.run(until: Date().addingTimeInterval(4.2))
+    if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+        precondition(sprite.animationTimerIsRunning, "Unread error must not stop the working timer")
+    }
     sprite.animate(false); window.orderOut(nil)
-    print("PASS: \(renderCount) native state/finish/shape renders, transparent corners, full working decode, eight palettes, reaction continuity")
+    precondition(!sprite.animationTimerIsRunning)
+    print("PASS: \(renderCount) native state/finish/shape renders, 24 mixed attention/work animations, timer continuity, transparent corners, full working decode, eight palettes, reaction continuity")
 }
