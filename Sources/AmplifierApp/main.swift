@@ -54,6 +54,7 @@ enum Keychain {
     private var latest: CompanionSnapshot?
     private var status = "Not connected"
     private var connected = false
+    private var connecting = false
     private var notificationStatus = "Checking notification permission…"
     private var notificationError: String?
     private var item: NSStatusItem!
@@ -162,27 +163,27 @@ enum Keychain {
     private func connect() {
         poll?.cancel(); closeBubbles(); composer?.close(); composer = nil
         previews = [:]; workLabels = [:]; detailRequests = []; previewAttempts = []
-        connected = false; latest = nil; host = nil
+        connected = false; connecting = false; latest = nil; host = nil
         guard !defaults.bool(forKey: "connectionPaused") else {
             status = "Disconnected. Saved messages are kept."; rebuildMenu(); return
         }
         do {
             let endpoint = try Endpoint(defaults.string(forKey: "endpoint") ?? "http://127.0.0.1:8941")
-            status = "Connecting…"; rebuildMenu()
+            connecting = true; status = "Connecting…"; rebuildMenu()
             poll = Task { [weak self] in
                 let token: String?
                 do {
                     token = try await Task.detached { try Keychain.read(endpoint.url.absoluteString) }.value
                 } catch {
                     guard !Task.isCancelled, let self else { return }
-                    self.status = error.localizedDescription; self.rebuildMenu(); return
+                    self.connecting = false; self.status = error.localizedDescription; self.rebuildMenu(); return
                 }
                 guard !Task.isCancelled, let self else { return }
                 guard let token, !token.isEmpty else {
-                    self.status = "Connect to your Unified host"; self.rebuildMenu(); self.showSettings(); return
+                    self.connecting = false; self.status = "Connect to your Unified host"; self.rebuildMenu(); self.showSettings(); return
                 }
                 do { try self.persist() }
-                catch { self.status = error.localizedDescription; self.rebuildMenu(); return }
+                catch { self.connecting = false; self.status = error.localizedDescription; self.rebuildMenu(); return }
                 let client = HostClient(endpoint: endpoint, token: token, clientID: self.journal.clientID)
                 self.host = client
                 var delay: UInt64 = 2
@@ -197,20 +198,20 @@ enum Keychain {
                         }
                     } catch {
                         guard !Task.isCancelled else { return }
-                        self.connected = false; self.status = error.localizedDescription
+                        self.connected = false; self.connecting = false; self.status = error.localizedDescription
                         self.rebuildMenu()
                         try? await Task.sleep(nanoseconds: delay * 1_000_000_000)
                         delay = min(delay * 2, 60)
                     }
                 }
             }
-        } catch { status = error.localizedDescription; rebuildMenu() }
+        } catch { connecting = false; status = error.localizedDescription; rebuildMenu() }
     }
     private func receive(_ value: CompanionSnapshot, client: HostClient) {
         let value = value.visibleChats { id in
             self.journal.follows(id, endpoint: client.endpoint.url.absoluteString, hostIdentity: value.hostIdentity)
         }
-        latest = value; connected = true
+        latest = value; connected = true; connecting = false
         let keys = Set(value.items.map(\.key))
         previews = previews.filter { keys.contains($0.key) }
         previewAttempts.formIntersection(keys)
@@ -362,6 +363,9 @@ enum Keychain {
         let menu = NSMenu()
         let unread = connected ? (latest?.items.filter { included($0) }.count ?? 0) : 0
         let work = latest?.workingCount ?? 0
+        sprite.update(connected: connected, connecting: connecting, working: work,
+            items: latest?.items.filter { included($0) } ?? [],
+            scope: (defaults.string(forKey: "endpoint") ?? "") + ":" + (latest?.hostIdentity ?? ""))
         let summary = !connected ? "Not connected" : (unread > 0 ? "\(unread) updates" + (work > 0 ? " · \(work) working" : "") : "")
         if !summary.isEmpty { menu.addItem(withTitle: summary, action: nil, keyEquivalent: "").isEnabled = false }
         let compose = menu.addItem(withTitle: "New message…", action: #selector(newMessage), keyEquivalent: "n")
@@ -371,7 +375,6 @@ enum Keychain {
             item.button?.title = ""
             menuAttention.isHidden = unread == 0
             item.button?.toolTip = "\(unread) updates · \(work) chats working"
-            sprite.motion = Motion.status(connected: connected, working: work, attention: latest.items.filter { included($0) && $0.kind != "completion" }.count)
             if !latest.sessions.isEmpty {
                 let chats = menu.addItem(withTitle: "Your chats", action: nil, keyEquivalent: "")
                 let attentionChats = Set(latest.items.filter { included($0) }.map(\.sessionId))
@@ -386,7 +389,7 @@ enum Keychain {
                 }
                 chats.submenu = list
             }
-        } else { item.button?.title = ""; menuAttention.isHidden = true; sprite.motion = .waiting }
+        } else { item.button?.title = ""; menuAttention.isHidden = true }
         let pending = journal.replies.filter { $0.status != "accepted" }
         if !pending.isEmpty {
             let saved = menu.addItem(withTitle: "Saved messages (\(pending.count))", action: nil, keyEquivalent: "")
@@ -615,7 +618,9 @@ enum Keychain {
         defaults.set(panel.isVisible, forKey: "hideTempo"); applyAppearance(); rebuildMenu()
     }
     private func applyAppearance() {
-        sprite.load(defaults.string(forKey: "shape") ?? "relay", palette: defaults.string(forKey: "palette") ?? "blue", finish: defaults.string(forKey: "finish") ?? "clear")
+        let shape = AvatarCatalog.canonical(defaults.string(forKey: "shape") ?? "relay")
+        defaults.set(shape, forKey: "shape")
+        sprite.load(shape, palette: defaults.string(forKey: "palette") ?? "blue", finish: defaults.string(forKey: "finish") ?? "clear")
         let visible = !defaults.bool(forKey: "hideTempo")
         if visible { panel.orderFrontRegardless() } else {
             panel.orderOut(nil); composer?.window?.orderOut(nil); surface.setComposing(false)
@@ -644,7 +649,7 @@ enum Keychain {
                 artwork: { name, palette, finish in
                     guard let url = Bundle.module.url(forResource: AvatarAppearance.resourceName(name, finish: finish), withExtension: "png", subdirectory: "Resources"),
                           let source = NSImage(contentsOf: url)?.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
-                    return AvatarAppearance.thumbnail(source, palette: palette)
+                    return AvatarAppearance.thumbnail(source, palette: palette, shape: name)
                 }, preferenceChanged: { [weak self] key in self?.preferenceChanged(key) },
                 connectionAction: { [weak self] action in try self?.changeConnection(action) },
                 manageDevices: { address in

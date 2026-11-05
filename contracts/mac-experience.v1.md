@@ -34,6 +34,8 @@ Amplifier.app
 
 2. **MP2 — Appearance is a direct choice.** Expose six shapes, eight swatches and
    Clear/Dark finishes; one choice updates all previews immediately and persists.
+   The six are Relay, Accord, d20, Crest, Meter and Clippy; retired Arc/Chord
+   choices migrate to d20/Accord without changing other preferences.
    Default to blue Relay/Clear with a visible, accessible selection.
    Broken: changing color needs a second menu or changes only one preview.
    Affected: people personalizing the companion.
@@ -41,6 +43,9 @@ Amplifier.app
 3. **MP3 — Attention has quiet surfaces.** Apply DC1/2 through a numberless menu
    badge, exact attention counts inside the app, and semantic status independent
    of avatar palette. The host feed, not delivery history, determines updates.
+   State-specific light and motion remain consistent across finishes/palettes.
+   Completion/error reactions play once per observed event, while offline and
+   Reduce Motion remain still; animation never marks an update read.
    Broken: working alone increments attention or a palette disguises an error.
    Affected: people deciding what needs review.
 

@@ -385,7 +385,7 @@ MainActor.assumeIsolated {
             let styledSettings = SettingsWindow(defaults: preferences, recoveryPath: nil, artwork: { name, palette, finish in
                 let url = atlasURL.deletingLastPathComponent().appendingPathComponent(AvatarAppearance.resourceName(name, finish: finish) + ".png")
                 guard let atlas = NSImage(contentsOf: url)?.cgImage(forProposedRect: nil, context: nil, hints: nil),
-                      let image = Optional(AvatarAppearance.thumbnail(atlas, palette: palette)) else { return nil }
+                      let image = Optional(AvatarAppearance.thumbnail(atlas, palette: palette, shape: name)) else { return nil }
                 return image
             }, preferenceChanged: { _ in }, connect: { _, _ in })
             let styledComposer = TempoComposer(chats: [("chat-1", "Planning a trip")], anchor: window.frame)

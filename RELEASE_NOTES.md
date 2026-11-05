@@ -1,28 +1,26 @@
-# Amplifier for Mac 0.1.0
+# Amplifier for Mac 0.1.1
 
-Initial public preview of the native Mac client, with Tempo as its optional
-desktop companion.
+Tempo has a refreshed family of six crystal avatars: Relay, Accord, d20, Crest,
+Meter and a Clippy tribute. Each has Clear and Dark artwork, eight color choices,
+and lights and motion designed for working, idle, response ready, needs input,
+error, connecting and offline states.
 
-- Menu-bar work and attention status, compact new-chat and reply composer.
-- Native notifications with inline reply and navigation to the relevant chat.
-- Six Tempo shapes, eight colors, Clear / Dark finishes and native materials.
-- Restricted browser-approved host connection and explicit connection controls.
-- Saved-message review and retry without automatic replay of uncertain work.
-- Official Amplifier icons, universal app packaging and signed update support.
+- Relay's circulating lights, Accord's column pulses, d20's rotating glow,
+  Crest's flexing light paths, Meter's varied EQ rhythm and Clippy's attentive
+  expressions give each shape its own character.
+- Completion and error reactions settle after playing once. Ordinary host
+  refreshes do not restart them, and reading a chat clears attention when the
+  host reports it as read.
+- Reduce Motion uses a stable pose; hidden and offline companions suspend
+  animation. Status colors continue to mean the same thing in every palette.
+- Existing Arc/Fold choices become d20; Chord becomes Accord. Other appearance
+  settings, connections and saved messages are preserved.
 
 Requires an existing compatible Amplifier Unified host and macOS 13 or later.
-The full workspace currently opens in a browser or installed web app. An
-integrated workspace window, browser control and native voice are not included.
+The workspace opens in a browser or installed web app. This update does not add
+browser execution or native desktop control.
 
-Signed with the approved maintainer Developer ID and notarized by Apple.
-Installation is drag-to-Applications; no GitHub account is required.
-
-Qualification covered the universal build, native checks, browser-approved
-connection, quick-chat delivery to a synthetic host, notification icon,
-disconnect/resume, device revocation and a real signed update preserving settings.
-Runtime installation/update checks used Apple silicon on macOS 27.0.1.
-
-This is an early preview. Physical Intel, the full accessibility/multiple-display
-matrix, and fresh end-to-end terminated-app Reply and PWA-navigation checks remain
-follow-up qualification. Existing component tests and earlier behavior checks
-are useful evidence, not substitutes for that broader coverage.
+Source and native component qualification are recorded in
+[the avatar release readiness record](docs/avatar-release-readiness.md).
+Signed-candidate installation and upgrade qualification must complete before
+this release is published. A development build is not the public installer.
