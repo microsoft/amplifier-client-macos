@@ -37,7 +37,31 @@ public enum NoticeStatus: String {
     }
 }
 
-/// Bounded public activity text; never infer model reasoning or dump tool inputs.
+/// Plain, bounded presentation text. Never evaluate links or fetch linked content.
+public enum NoticeText {
+    public static func plain(_ raw: String, limit: Int = 600) -> String {
+        var text = String(raw.prefix(8192))
+        // Strip block syntax before inline parsing, including incomplete streamed headings.
+        text = text.replacingOccurrences(of: #"(?m)^\s{0,3}(?:#{1,6}\s+|>\s*|[-+*]\s+|[0-9]+[.)]\s+)"#, with: "", options: .regularExpression)
+        text = text.replacingOccurrences(of: #"(?m)^\s*```[^\n]*"#, with: "", options: .regularExpression)
+        if let parsed = try? AttributedString(markdown: text, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
+            text = String(parsed.characters)
+        }
+        // A bounded/streaming response may end before its emphasis closes.
+        text = text.replacingOccurrences(of: #"(^|\s)\*\*(?=\S)"#, with: "$1", options: .regularExpression)
+        text = String(text.unicodeScalars.map { scalar -> Character in
+            let value = scalar.value
+            if CharacterSet.controlCharacters.contains(scalar) || (0x200B...0x200F).contains(value) ||
+                (0x202A...0x202E).contains(value) || (0x2060...0x206F).contains(value) || value == 0xFEFF { return " " }
+            return Character(String(scalar))
+        })
+        text = text.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+        guard text.count > limit else { return text }
+        return String(text.prefix(max(0, limit - 1))) + "…"
+    }
+}
+
+/// Public labels and selected host-projected hints, never raw tool inputs/results.
 public struct WorkPreview: Equatable {
     public let text: String
     public let stateID: String
@@ -50,30 +74,67 @@ public struct WorkPreview: Equatable {
         default: return "Thinking…"
         }
     }
+    private static func line(_ row: [String: Any], _ key: String) -> String {
+        NoticeText.plain(row[key] as? String ?? "", limit: 240)
+    }
+    private static func identifier(_ value: String) -> String? {
+        guard !value.isEmpty, value.count <= 120,
+              value.range(of: #"^[A-Za-z][A-Za-z0-9_.:/-]*$"#, options: .regularExpression) != nil else { return nil }
+        return value
+    }
+    private static func words(_ value: String) -> String {
+        value.replacingOccurrences(of: #"[_.:/-]+"#, with: " ", options: .regularExpression)
+    }
+    private static func action(_ row: [String: Any]) -> String {
+        let kind = line(row, "kind").lowercased(), label = line(row, "label")
+        if ["llm", "model", "model_call", "provider"].contains(kind) { return "Thinking…" }
+        let tool = line(row, "tool").isEmpty ? label : line(row, "tool")
+        let name = tool.lowercased().components(separatedBy: ":").last ?? tool.lowercased()
+        let summary = line(row, "summary")
+        // A useful producer title/summary wins. Do not repeat the tool name around it.
+        if !summary.isEmpty && summary.caseInsensitiveCompare(label) != .orderedSame &&
+            !["Running \(tool)", "Completed \(tool)"].contains(summary) {
+            if label.isEmpty || label == tool && identifier(tool) != nil { return summary }
+            return summary.lowercased().hasPrefix(label.lowercased()) ? summary : label + " · " + summary
+        }
+        if !label.isEmpty && label != tool { return label }
+        let hints = row["inputSummary"] as? [String: Any] ?? [:]
+        let operation = identifier(line(hints, "action")) ?? identifier(line(hints, "operation"))
+        if name == "app_control" {
+            let path = line(row, "actionPath")
+            if path.hasPrefix("dispatch → "), let nested = identifier(String(path.dropFirst("dispatch → ".count))) {
+                return "App · " + words(nested)
+            }
+            return operation.map { "App · " + words($0) } ?? "Using app controls…"
+        }
+        let file = ["file_path", "path", "filename"].map { line(hints, $0) }.first { !$0.isEmpty }
+        let leaf = file.map { ($0 as NSString).lastPathComponent }.flatMap { $0.isEmpty ? nil : $0 }
+        let fileVerbs = ["read_file":"Reading", "read":"Reading", "write_file":"Writing", "write":"Writing", "edit_file":"Editing"]
+        if let verb = fileVerbs[name] { return leaf.map { verb + " " + $0 } ?? verb + " a file…" }
+        if let operation { return words(tool) + " · " + words(operation) }
+        let known = ["bash":"Running a command…", "shell":"Running a command…", "exec_command":"Running a command…",
+                     "apply_patch":"Editing files…", "grep":"Searching files…", "glob":"Finding files…",
+                     "web_search":"Searching the web…", "web_fetch":"Fetching a page…", "todo":"Updating the task list…",
+                     "image_generate":"Generating an image…", "delegate":"Delegating work…"]
+        if let text = known[name] { return text }
+        if ["model call", "llm request", "llm response", "thinking", "working"].contains(label.lowercased()) { return "Thinking…" }
+        if tool.isEmpty { return kind == "tool" ? "Running a tool…" : "Working…" }
+        return identifier(tool) == nil ? tool : "Using " + words(tool) + "…"
+    }
     public static func from(nodes: [[String: Any]]) -> WorkPreview? {
-        let live = ["running", "working", "streaming", "pending", "started", "queued", "waiting"]
-        guard let row = nodes.last(where: {
+        let live = ["running", "working", "streaming", "pending", "started", "starting", "queued", "waiting", "retrying"]
+        let active = nodes.filter {
             ($0["endedAt"] == nil || $0["endedAt"] is NSNull) && live.contains(($0["phase"] ?? $0["status"]) as? String ?? "")
-        }) else { return nil }
-        func line(_ key: String) -> String? {
-            guard let raw = row[key] as? String else { return nil }
-            let text = raw.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
-            return text.isEmpty ? nil : String(text.prefix(240))
         }
-        let kind = line("kind") ?? "", label = line("label") ?? ""
-        let model = ["llm", "model", "model_call", "provider"].contains(kind.lowercased()) ||
-            ["model call", "llm request", "llm response", "thinking", "working"].contains(label.lowercased())
-        let text: String
-        if model { text = "Thinking…" }
-        else {
-            let summary = line("summary")
-            let action = label.isEmpty ? (kind == "tool" ? "Running tool…" : "Working…") : label
-            text = summary.map { $0 == action ? action : action + " · " + $0 } ?? action
-        }
-        // Detail/progress changes do not resurrect a dismissed action. A new node
-        // or lifecycle phase does, including another model call with the same label.
-        let state = [line("id") ?? label, kind, line("phase") ?? line("status") ?? ""].joined(separator: "|")
-        return WorkPreview(text: String(text.prefix(360)), stateID: state)
+        let tools = active.filter { line($0, "kind") == "tool" }
+        guard let row = tools.last ?? active.last else { return nil }
+        let others = max(0, tools.count - 1)
+        let suffix = others == 0 ? "" : " · +\(others) tool\(others == 1 ? "" : "s")"
+        let text = NoticeText.plain(action(row), limit: 360 - suffix.count) + suffix
+        // Progress text and concurrent siblings do not resurrect a dismissed action.
+        let state = [line(row, "id").isEmpty ? line(row, "label") : line(row, "id"), line(row, "kind"),
+                     line(row, "phase").isEmpty ? line(row, "status") : line(row, "phase")].joined(separator: "|")
+        return WorkPreview(text: text, stateID: state)
     }
 }
 

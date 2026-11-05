@@ -95,6 +95,10 @@ MainActor.assumeIsolated {
     let scroll = bubbles.window.contentView!.subviews.compactMap { $0 as? NSScrollView }.first!
     let stack = scroll.documentView as! NSStackView
     let row = (stack.arrangedSubviews[0] as! TempoMaterial).content.subviews[0] as! NSButton
+    let detailLabel = (stack.arrangedSubviews[0] as! TempoMaterial).content.subviews.compactMap { $0 as? NSTextField }.first!
+    precondition(detailLabel.frame.width > row.frame.width, "Detail uses room below the status and dismiss icons")
+    precondition(detailLabel.frame.maxY <= row.frame.minY, "Title and detail cannot overlap")
+    precondition(detailLabel.hitTest(detailLabel.frame.origin) == nil, "Detail leaves card click/drag routing intact")
     row.performClick(nil)
     precondition(actions.last == "chat-1", "Bubble must open its own chat")
     @MainActor func clickPadding(_ material: NSView) {

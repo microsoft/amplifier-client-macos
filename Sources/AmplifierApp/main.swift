@@ -520,7 +520,14 @@ enum Keychain {
     private func activityRows() -> [TempoBubbles.Row] {
         guard connected, let latest else { return [] }
         var rows = latest.items.filter { included($0) }.map { item in
-            TempoBubbles.Row(key: item.key, title: item.title, detail: previews[item.key] ?? item.summary, sessionID: item.sessionId, status: NoticeStatus.attention(kind: item.kind, working: latest.sessions.contains { $0.id == item.sessionId && $0.isWorking }), dismissalState: item.key)
+            let session = latest.sessions.first { $0.id == item.sessionId }
+            let status = NoticeStatus.attention(kind: item.kind, working: session?.isWorking == true)
+            // A new turn must not look like it is still performing the unread answer.
+            // Keep the unread meaning while showing the current observed action.
+            let detail = status == .working
+                ? "Unread · " + (workLabels[item.sessionId]?.text ?? WorkPreview.fallback(status: session?.status ?? "working"))
+                : previews[item.key] ?? item.summary
+            return TempoBubbles.Row(key: item.key, title: item.title, detail: detail, sessionID: item.sessionId, status: status, dismissalState: item.key)
         }
         let noticed = Set(rows.map(\.sessionID))
         if defaults.bool(forKey: "workBubbles") {

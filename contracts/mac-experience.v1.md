@@ -60,7 +60,10 @@ Amplifier.app
    Dragging the expanded header resizes the list: full extent follows content
    up to the screen boundary; dragging shorter remembers a height cap. Both
    modes shrink to fit fewer items. Show public action detail on one truncated
-   line, with model waits labeled “Thinking…”. Broken: an update resets scrolling,
+   line, with model waits labeled “Thinking…”. Response snippets are plain text;
+   detail uses the available width independently of the title. Prefer public
+   action metadata over generic tool names; never dump raw inputs or outputs.
+   Broken: an update resets scrolling,
    scrolling gaps moves the app behind Tempo,
    or an opaque rectangle fills the notice list. Affected: companion users.
 

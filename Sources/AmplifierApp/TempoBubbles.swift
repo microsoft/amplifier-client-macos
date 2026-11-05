@@ -58,26 +58,32 @@ import ClientCore
     private func card(_ row: Row, index: Int, compact: Bool) -> TempoMaterial {
         let material = NoticeMaterial(radius: 24)
         material.frame = NSRect(x: 0, y: 0, width: 320, height: compact ? 38 : 54)
-        let button = NoticeButton(frame: NSRect(x: compact ? 16 : 36, y: 9, width: compact ? 288 : 248, height: compact ? 20 : 36))
-        button.isBordered = false; button.alignment = .left; button.cell?.wraps = true
+        let button = NoticeButton(frame: NSRect(x: compact ? 16 : 36, y: compact ? 9 : 28, width: compact ? 288 : 248, height: 20))
+        button.isBordered = false; button.alignment = .left; button.cell?.wraps = false
         button.cell?.lineBreakMode = .byTruncatingTail
-        let heading = compact ? summary + " · " + row.title : row.title
-        let title = NSMutableAttributedString(string: heading + (compact ? "" : "\n"), attributes: [
+        let cleanTitle = NoticeText.plain(row.title, limit: 240)
+        let cleanDetail = NoticeText.plain(row.detail)
+        let heading = compact ? summary + " · " + cleanTitle : cleanTitle
+        button.attributedTitle = NSAttributedString(string: heading, attributes: [
             .font: NSFont.systemFont(ofSize: 13, weight: .semibold), .foregroundColor: NSColor.labelColor])
-        if !compact {
-            title.append(NSAttributedString(string: row.detail, attributes: [
-                .font: NSFont.systemFont(ofSize: 12), .foregroundColor: NSColor.secondaryLabelColor]))
-        }
-        button.attributedTitle = title; button.toolTip = compact ? "Show " + summary.lowercased() : row.title + "\n" + row.detail
-        button.setAccessibilityLabel(compact ? "Show " + summary.lowercased() : row.title + ", " + row.detail + ". Open chat")
+        button.toolTip = compact ? "Show " + summary.lowercased() : cleanTitle + "\n" + cleanDetail
+        button.setAccessibilityLabel(compact ? "Show " + summary.lowercased() : cleanTitle + ", " + cleanDetail + ". Open chat")
         button.tag = index; button.target = self; button.action = compact ? #selector(toggleList) : #selector(select(_:))
         material.content.addSubview(button)
         if !compact {
+            // The detail uses the whole lower line, including the space below the
+            // icon and dismiss control. Its hit region belongs to the draggable card.
+            let detail = NoticeDetailLabel(labelWithString: cleanDetail)
+            detail.frame = NSRect(x: 16, y: 9, width: 288, height: 18)
+            detail.font = .systemFont(ofSize: 12); detail.textColor = .secondaryLabelColor
+            detail.lineBreakMode = .byTruncatingTail; detail.maximumNumberOfLines = 1
+            detail.setAccessibilityElement(false); detail.toolTip = cleanDetail
+            material.content.addSubview(detail)
             let icon = NoticeStatusView(status: row.status)
             icon.frame = NSRect(x: 13, y: 28, width: 15, height: 15)
             material.content.addSubview(icon)
             let remove = FirstClickButton(image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "Dismiss")!, target: self, action: #selector(dismissRow(_:)))
-            remove.frame = NSRect(x: 290, y: 16, width: 24, height: 24); remove.isBordered = false
+            remove.frame = NSRect(x: 290, y: 28, width: 24, height: 24); remove.isBordered = false
             remove.contentTintColor = .secondaryLabelColor; remove.tag = index
             remove.toolTip = row.status == .working ? "Hide until activity changes" : "Hide from Tempo; keep unread"; remove.setAccessibilityLabel("Dismiss " + row.title + " from Tempo")
             material.content.addSubview(remove)
@@ -210,6 +216,10 @@ import ClientCore
     @objc private func dismissRow(_ sender: NSButton) {
         guard rows.indices.contains(sender.tag) else { return }; dismiss?(rows[sender.tag])
     }
+}
+
+@MainActor private final class NoticeDetailLabel: NSTextField {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 @MainActor private final class NoticeStatusView: NSView {
