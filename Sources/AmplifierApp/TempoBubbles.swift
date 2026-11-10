@@ -14,6 +14,9 @@ import ClientCore
         let sessionID: String
         var status: NoticeStatus = .unread
         var dismissalState: String = ""
+        var serviceID: String = ""
+        var serviceName: String = ""
+        var priority: NoticePriority = .unread
     }
     let window: NoticePanel
     private var rows: [Row] = []
@@ -27,6 +30,9 @@ import ClientCore
     private var sizing: NoticeListSize
     private var scrollView: NSScrollView?
     private var renderedKeys: [String] = []
+    private var renderedCards: [String: NSView] = [:]
+    private var showServiceHeadings = false
+    private var suppressedForSpace = false
     var listHeight: CGFloat { scrollView?.frame.height ?? 0 }
     var fitsContents: Bool { sizing.fitsContents }
     init(defaults: UserDefaults = .standard) {
@@ -39,10 +45,12 @@ import ClientCore
         window.level = TempoWindows.input; window.hidesOnDeactivate = false
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
     }
-    func update(_ incoming: [Row], anchor: NSWindow, keepExisting: Bool, attentionCount: Int? = nil) {
+    func update(_ incoming: [Row], anchor: NSWindow, keepExisting: Bool, attentionCount: Int? = nil, showServiceHeadings: Bool = false) {
         guard !incoming.isEmpty else { close(); return }
         let previous = rows
         let previousCount = self.attentionCount
+        let headingsChanged = self.showServiceHeadings != showServiceHeadings
+        self.showServiceHeadings = showServiceHeadings
         self.attentionCount = max(0, attentionCount ?? incoming.count)
         // Retain ordering while reading, but remove notices that were reviewed.
         if keepExisting {
@@ -51,9 +59,10 @@ import ClientCore
             let keys = Set(rows.map(\.key)); rows += incoming.filter { !keys.contains($0.key) }
         } else { rows = incoming }
         window.anchor = anchor
-        if rows != previous || previousCount != self.attentionCount || !window.isVisible { render() }
+        if rows != previous || previousCount != self.attentionCount || headingsChanged || !window.isVisible { render() }
         window.anchor = anchor
-        position(anchor); window.orderFrontRegardless()
+        position(anchor)
+        if !suppressedForSpace { window.orderFrontRegardless() }
     }
     private func card(_ row: Row, index: Int, compact: Bool) -> TempoMaterial {
         let material = NoticeMaterial(radius: 24)
@@ -97,12 +106,13 @@ import ClientCore
         let oldScroll = scrollView
         let oldStack = oldScroll?.documentView as? NSStackView
         let oldTop = oldScroll?.documentVisibleRect.maxY ?? 0
-        let bookmarks: [(String, CGFloat)] = zip(renderedKeys, oldStack?.arrangedSubviews ?? []).compactMap { key, view in
-            guard let visible = oldScroll?.documentVisibleRect, view.frame.intersects(visible) else { return nil }
+        let bookmarks: [(String, CGFloat)] = renderedKeys.compactMap { key in
+            guard let view = renderedCards[key], let visible = oldScroll?.documentVisibleRect, view.frame.intersects(visible) else { return nil }
             return (key, oldTop - view.frame.maxY)
         }
         let oldDistance = (oldStack?.frame.height ?? 0) - oldTop
         scrollView = nil
+        renderedCards = [:]
         let root = NoticeBackground()
         if rows.count > 1 && !listExpanded {
             let depth = min(2, rows.count - 1)
@@ -118,7 +128,7 @@ import ClientCore
             front.frame.origin.y = CGFloat(depth * 8); root.addSubview(front)
         } else {
             let header: CGFloat = listExpanded ? 32 : 0
-            let listHeight = CGFloat(rows.count * 62 - 8)
+            let listHeight = contentHeight
             let height = CGFloat(sizing.height(content: Double(listHeight), available: Double(availableListHeight)))
             window.setContentSize(NSSize(width: 320, height: height + header)); root.frame = NSRect(x: 0, y: 0, width: 320, height: height + header)
             let scroll = NoticeScrollView(frame: NSRect(x: 0, y: 0, width: 320, height: height))
@@ -128,11 +138,19 @@ import ClientCore
             scroll.hasVerticalScroller = false; scroll.hasHorizontalScroller = false
             let stack = NoticeStackView(); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 8
             for (index, row) in rows.enumerated() {
+                if startsGroup(at: index) {
+                    let heading = NoticeGroupHeader(name: row.serviceName)
+                    heading.translatesAutoresizingMaskIntoConstraints = false
+                    heading.widthAnchor.constraint(equalToConstant: 320).isActive = true
+                    heading.heightAnchor.constraint(equalToConstant: 24).isActive = true
+                    stack.addArrangedSubview(heading)
+                }
                 let material = card(row, index: index, compact: false)
                 material.translatesAutoresizingMaskIntoConstraints = false
                 material.widthAnchor.constraint(equalToConstant: 320).isActive = true
                 material.heightAnchor.constraint(equalToConstant: 54).isActive = true
                 stack.addArrangedSubview(material)
+                renderedCards[row.key] = material
             }
             stack.frame = NSRect(x: 0, y: 0, width: 320, height: listHeight)
             scroll.documentView = stack; root.addSubview(scroll); scrollView = scroll
@@ -164,8 +182,8 @@ import ClientCore
             stack.layoutSubtreeIfNeeded()
             let match = bookmarks.first { mark in rows.contains { $0.key == mark.0 } }
             var top = stack.frame.height - max(0, oldDistance)
-            if let match, let index = rows.firstIndex(where: { $0.key == match.0 }) {
-                top = stack.arrangedSubviews[index].frame.maxY + match.1
+            if oldDistance > 0.5, let match, let card = renderedCards[match.0] {
+                top = card.frame.maxY + match.1
             }
             let y = min(max(0, top - scroll.contentSize.height), max(0, stack.frame.height - scroll.contentSize.height))
             scroll.contentView.scroll(to: NSPoint(x: 0, y: y)); scroll.reflectScrolledClipView(scroll.contentView)
@@ -177,19 +195,25 @@ import ClientCore
     #if NATIVE_CHECK
     var availableHeightOverride: CGFloat?
     #endif
-    private var contentHeight: CGFloat { CGFloat(max(0, rows.count * 62 - 8)) }
+    private func startsGroup(at index: Int) -> Bool {
+        showServiceHeadings && !rows[index].serviceID.isEmpty &&
+            (index == 0 || rows[index - 1].serviceID != rows[index].serviceID)
+    }
+    private var contentHeight: CGFloat {
+        CGFloat(max(0, rows.count * 62 - 8) + rows.indices.filter { startsGroup(at: $0) }.count * 32)
+    }
+    private func referenceFrame(_ anchor: NSWindow) -> NSRect {
+        var reference = anchor.frame
+        if let art = artworkFrame?() { reference.size.height = max(0, art.maxY - reference.minY) }
+        return reference
+    }
     private var availableListHeight: CGFloat {
         #if NATIVE_CHECK
         if let availableHeightOverride { return availableHeightOverride }
         #endif
         guard let anchor = window.anchor, let screen = anchor.screen else { return 178 }
-        let safe = TempoPlacement.inset(screen.visibleFrame)
-        let top = artworkFrame?()?.maxY ?? anchor.frame.maxY
         let header: CGFloat = listExpanded ? 32 : 0
-        // Prefer above the artwork, with the existing below-avatar fallback near the screen top.
-        let above = safe.maxY - top - 8 - header
-        let room = above >= 54 ? above : anchor.frame.minY - safe.minY - 8 - header
-        return max(0, min(safe.height - header, room))
+        return max(0, TempoPlacement.noticeHeight(anchor: referenceFrame(anchor), visible: screen.visibleFrame) - header)
     }
     func resizeList(to height: CGFloat) {
         guard listExpanded else { return }
@@ -204,11 +228,19 @@ import ClientCore
             if abs(expected - listHeight) > 0.5 { render(); return }
         }
         guard let visible = anchor.screen?.visibleFrame else { return }
-        var reference = anchor.frame
-        if let art = artworkFrame?() { reference.size.height = max(0, art.maxY - reference.minY) }
+        let reference = referenceFrame(anchor)
+        let room = TempoPlacement.noticeHeight(anchor: reference, visible: visible)
+        // With no room even for the header/compact card, temporarily hide rather
+        // than detach the list or cover the avatar. Keep expansion and saved size.
+        let minimum = listExpanded ? CGFloat(32) : (scrollView == nil ? window.frame.height : CGFloat(1))
+        guard room >= minimum else {
+            suppressedForSpace = true; window.orderOut(nil); return
+        }
         window.setFrameOrigin(TempoPlacement.bubbles(anchor: reference, size: window.frame.size, visible: visible).origin)
+        if suppressedForSpace { window.orderFrontRegardless() }
+        suppressedForSpace = false
     }
-    func close() { window.anchor = nil; window.orderOut(nil); rows = []; renderedKeys = []; scrollView = nil; listExpanded = false }
+    func close() { window.anchor = nil; window.orderOut(nil); rows = []; renderedKeys = []; renderedCards = [:]; scrollView = nil; listExpanded = false; suppressedForSpace = false }
 
     @objc private func select(_ sender: NSButton) {
         guard rows.indices.contains(sender.tag) else { return }; openChat?(rows[sender.tag].sessionID)
@@ -216,6 +248,22 @@ import ClientCore
     @objc private func dismissRow(_ sender: NSButton) {
         guard rows.indices.contains(sender.tag) else { return }; dismiss?(rows[sender.tag])
     }
+}
+
+@MainActor private final class NoticeGroupHeader: NSView {
+    init(name: String) {
+        super.init(frame: .zero)
+        let label = NSTextField(labelWithString: NoticeText.plain(name, limit: 120))
+        label.frame = NSRect(x: 16, y: 5, width: 288, height: 17)
+        label.font = .systemFont(ofSize: 11, weight: .semibold)
+        label.textColor = .secondaryLabelColor; label.lineBreakMode = .byTruncatingTail
+        addSubview(label)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.separatorColor.setFill(); NSRect(x: 16, y: 0, width: 288, height: 1).fill()
+    }
+    override func mouseDown(with event: NSEvent) { NoticeDrag.track(in: self) {} }
 }
 
 @MainActor private final class NoticeDetailLabel: NSTextField {

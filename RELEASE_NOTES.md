@@ -1,4 +1,25 @@
-# Amplifier for Mac 0.1.5
+# Amplifier for Mac 0.1.6
+
+Tempo's expanded activity list stays directly above the avatar when resized or
+moved toward the top of a display. It reduces the scroll viewport instead of
+jumping below or covering the avatar, then restores the saved height when space
+returns. Fit-all and a manually chosen height cap remain intact.
+
+- Notices sort across services by default: requests for input and errors, unread
+  updates, then ongoing work.
+- Settings → Tempo adds **Group by service** to apply that order within each
+  service, and **Show service headings** for optional labels and separators.
+- Group headings do not count as updates or change chat/dismiss targets. Changing
+  grouping preserves the visible card and scroll offset.
+- The ongoing-work toggle now lives in Settings → Tempo alongside these options.
+
+Connections, credentials, avatar choices and saved replies are preserved. No
+server update is required. Core/native checks cover sorting, fractional display
+coordinates, resize/drag limits, recovery of saved height and grouped scrolling.
+Signed app/DMG and upgrade qualification precede publication; manual VoiceOver
+and the full physical display matrix remain separate coverage.
+
+## Previous release: 0.1.5
 
 Connect Amplifier for Mac to multiple Amplifier Unified services and see their
 chat activity together in Tempo.

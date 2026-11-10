@@ -563,7 +563,8 @@ enum Keychain {
                 let session = latest.sessions.first { $0.id == item.sessionId }
                 let status = NoticeStatus.attention(kind: item.kind, working: session?.isWorking == true)
                 let detail = status == .working ? "Unread · " + (state.workLabels[item.sessionId]?.text ?? WorkPreview.fallback(status: session?.status ?? "working")) : state.previews[item.key] ?? item.summary
-                return TempoBubbles.Row(key: prefix + item.key, title: item.title, detail: label + detail, sessionID: route(item.sessionId), status: status, dismissalState: item.key)
+                return TempoBubbles.Row(key: prefix + item.key, title: item.title, detail: label + detail, sessionID: route(item.sessionId), status: status, dismissalState: item.key,
+                    serviceID: state.registration.id, serviceName: serviceTitle(state), priority: .attention(status))
             }
             let noticed = Set(items.map(\.sessionId))
             if defaults.bool(forKey: "workBubbles") {
@@ -571,7 +572,8 @@ enum Keychain {
                     TempoBubbles.Row(key: prefix + "work:" + $0.id, title: $0.title,
                         detail: label + (state.workLabels[$0.id]?.text ?? WorkPreview.fallback(status: $0.status)),
                         sessionID: route($0.id), status: .working,
-                        dismissalState: "work|" + $0.status + "|" + (state.workLabels[$0.id]?.stateID ?? ""))
+                        dismissalState: "work|" + $0.status + "|" + (state.workLabels[$0.id]?.stateID ?? ""),
+                        serviceID: state.registration.id, serviceName: serviceTitle(state), priority: .working)
                 }
             }
             let scoped = saved.filter { $0.key.hasPrefix(prefix) }
@@ -581,7 +583,7 @@ enum Keychain {
         }
         // Offline services retain their dismissal records until they can reconcile.
         if saved != original { defaults.set(saved, forKey: "dismissedTempoNotices") }
-        return all
+        return NoticeOrdering.sorted(all, grouped: defaults.bool(forKey: "groupNoticesByService"), service: { $0.serviceID }, priority: { $0.priority })
     }
     private func refreshBubbles() {
         guard connected, panel.isVisible else { closeBubbles(); return }
@@ -602,7 +604,12 @@ enum Keychain {
             self.defaults.set(saved, forKey: "dismissedTempoNotices"); self.refreshBubbles()
         }
         let count = online.reduce(0) { count, state in count + (state.latest?.items.filter { included($0, state: state) }.count ?? 0) }
-        bubbles.update(rows, anchor: panel, keepExisting: bubblesManual, attentionCount: count)
+        // Re-sort on meaningful priority/group changes; rendering preserves the
+        // reader's visible card and offset even when headers are inserted/removed.
+        let headings = defaults.bool(forKey: "groupNoticesByService") &&
+            (defaults.object(forKey: "showNoticeServiceHeadings") as? Bool ?? true) &&
+            Set(rows.map(\.serviceID)).count > 1
+        bubbles.update(rows, anchor: panel, keepExisting: false, attentionCount: count, showServiceHeadings: headings)
         surface.setBubblesVisible(true)
     }
     private func requestVisibleDetails() {
