@@ -60,3 +60,38 @@ over, bounded queues and honest unknown-effect recovery. Browser native messagin
 is initiated by the extension; it is not a server-initiated connection to the Mac.
 Shared UI-use owns task decisions and browser adapters; canonical computer-use
 owns desktop fallback. See the roadmap; this is not implemented browser control.
+
+## Multiple registered services
+
+`ServiceRegistry` stores nonsecret registrations and the preferred destination
+in a versioned defaults value. Each registration has a local immutable ID,
+validated origin, optional display name, pause state and pinned durable host
+identity. The legacy endpoint is imported once without moving its Keychain
+account. An existing empty catalog stays empty; a corrupt catalog is preserved
+for recovery rather than silently replaced. Default HTTP/HTTPS ports are treated
+as aliases when adding, while an existing credential account spelling is retained.
+
+One `ServiceConnection` per registration owns its `HostClient`, polling generation,
+backoff, current availability and detail caches. Successful first observation pins
+the host identity; replacement requires explicit reapproval. Pause/forget cancels
+only that connection. Late callbacks from canceled generations cannot publish
+state. An offline snapshot is not current activity; the menu names unavailable
+services while continuing to show healthy services.
+
+The controller aggregates attention/work into one Tempo surface. Notification
+threads, row identities, dismissal records and reaction identities are scoped
+by service/host. Menus group chats by service; cards and desktop notices name the
+service when more than one is registered. The journal already scopes notifications,
+followed chats and saved commands by endpoint and durable host identity.
+
+`ServiceTarget` captures registration, endpoint, durable host and optional chat.
+A composer draft keeps that capture across refreshes or default-service changes.
+Forgetting/readding an origin does not silently retarget a draft. The default
+only orders new destinations and handles generic Open Amplifier. Captured sends
+still use the original client and host receipt rules. Registration changes block
+only while that service has in-flight or waiting message delivery.
+
+Visible detail reads rotate services and chats, with shared ceilings of five
+work-detail and ten response-detail reads. Main snapshot polling/backoff remains
+independent. This uses the existing companion-v1 API; there is no service proxy,
+credential replication, merged host history, server change, or execution authority.

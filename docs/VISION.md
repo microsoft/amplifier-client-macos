@@ -26,7 +26,8 @@ companion. Native interaction respects the person using the computer: ordinary
 keyboard conventions, deliberate focus changes, accessible controls, appropriate
 materials and clear permission boundaries.
 
-The three experiences share one connection and navigation authority:
+The three experiences share one connection and navigation authority managing
+independently registered Unified services:
 
 1. **Workspace:** full conversations, projects, artifacts and settings in an
    ordinary application window. Planned; the preview opens the existing web UI.
@@ -34,6 +35,16 @@ The three experiences share one connection and navigation authority:
    composer. Implemented; additional shortcuts and system integrations can follow.
 3. **Tempo:** optional desktop artwork and attention surfaces. Implemented; never
    required to use the rest of the application.
+
+## Multiple services (RATIFIED 2026-11-10)
+
+Register several Unified services, including remote and Mac-local instances.
+One optional Tempo presents their combined attention and work, with service
+identity visible wherever a person chooses or acts on a chat. Registration,
+credentials, connection health and disconnect/forget controls remain independent.
+Choosing a default service never changes the destination of an existing reply or
+draft. One unavailable service must not block observation or sending on another.
+Existing single-service installations retain their connection during migration.
 
 ## Evolution
 

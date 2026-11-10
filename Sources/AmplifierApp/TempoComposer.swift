@@ -1,6 +1,8 @@
 #if os(macOS)
 import AppKit
 
+enum ComposerError: Error { case unavailable(String) }
+
 @MainActor final class MessageEditor: NSTextView {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override func draw(_ dirtyRect: NSRect) {
@@ -25,9 +27,11 @@ import AppKit
     private var recovery = false
     private var anchor: NSRect
     var onSend: ((String?, String) async throws -> String)?
+    var titleForTarget: ((String) -> String?)?
+    var canDiscardOnClose: Bool { !sending && (editor.string.isEmpty || recovery) }
     var onResize: (() -> Void)?
     var onClose: (() -> Void)?
-    init(chats: [(String, String)], anchor: NSRect) {
+    init(chats: [(String, String)], anchor: NSRect, includesDefaultNewChat: Bool = true) {
         self.anchor = anchor
         let window = ComposerPanel(contentRect: NSRect(x: 0, y: 0, width: 360, height: 88),
             styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -37,7 +41,7 @@ import AppKit
         super.init(window: window)
         window.onDismiss = { [weak self] in self?.close() }
         window.contentView = material
-        target.addItem(withTitle: "New chat")
+        if includesDefaultNewChat { target.addItem(withTitle: "New chat") } else { ids = [] }
         for (id, title) in chats { ids.append(id); target.addItem(withTitle: title) }
         target.bezelStyle = .recessed; target.isBordered = false; target.font = .systemFont(ofSize: 12)
         target.toolTip = "Active and pinned chats, plus chats you use in Tempo"; target.setAccessibilityLabel("Chat")
@@ -63,6 +67,22 @@ import AppKit
         layout(height: 88)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    /// Keep a draft's captured destination even if it is currently unavailable.
+    func updateChoices(_ chats: [(String, String)]) {
+        guard !sending else { return }
+        let index = target.indexOfSelectedItem
+        let selected = ids.indices.contains(index) ? ids[index] : nil
+        let title = target.titleOfSelectedItem ?? "Previous destination"
+        ids = chats.map { $0.0 }; target.removeAllItems()
+        chats.forEach { target.addItem(withTitle: $0.1) }
+        if let selected {
+            if let index = ids.firstIndex(where: { $0 == selected }) { target.selectItem(at: index) }
+            else {
+                ids.append(selected); target.addItem(withTitle: title)
+                target.selectItem(at: ids.count - 1)
+            }
+        }
+    }
     private func layout(height: CGFloat) {
         window?.setContentSize(NSSize(width: 360, height: height))
         target.frame = NSRect(x: 14, y: 12, width: 278, height: 26)
@@ -105,6 +125,7 @@ import AppKit
     @objc private func submit() {
         let text = editor.string.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !sending, !recovery, !text.isEmpty, let onSend else { return }
+        guard ids.indices.contains(target.indexOfSelectedItem) else { return }
         let selected = ids[target.indexOfSelectedItem]
         sending = true; sendButton.isEnabled = false; target.isEnabled = false; editor.isEditable = false
         status.stringValue = "Sending…"; textDidChange(Notification(name: NSText.didChangeNotification))
@@ -112,9 +133,11 @@ import AppKit
             do {
                 let id = try await onSend(selected, text)
                 if let index = ids.firstIndex(where: { $0 == id }) { target.selectItem(at: index) }
-                else { ids.append(id); target.addItem(withTitle: "This chat"); target.selectItem(at: ids.count - 1) }
+                else { ids.append(id); target.addItem(withTitle: titleForTarget?(id) ?? "This chat"); target.selectItem(at: ids.count - 1) }
                 editor.string = ""; status.stringValue = "Sent · replies will appear in Tempo."
                 target.isEnabled = true; editor.isEditable = true
+            } catch ComposerError.unavailable(let message) {
+                status.stringValue = message; target.isEnabled = true; editor.isEditable = true
             } catch {
                 recovery = true; status.stringValue = "Delivery unconfirmed. Check Saved messages in the Tempo menu."
                 status.toolTip = error.localizedDescription

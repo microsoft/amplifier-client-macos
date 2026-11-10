@@ -316,12 +316,17 @@ MainActor.assumeIsolated {
     preferences.set("http://127.0.0.1:8941", forKey: "endpoint")
     defer { preferences.removePersistentDomain(forName: suite) }
     var changes: [String] = []; var connections = 0; var connectionActions: [ConnectionAction] = []
-    let settings = SettingsWindow(defaults: preferences, recoveryPath: nil, artwork: { _, _, _ in nil },
+    var service = try! RegisteredService(address: "http://127.0.0.1:8941", name: "Office")
+    var settings: SettingsWindow!
+    settings = SettingsWindow(defaults: preferences, recoveryPath: nil, artwork: { _, _, _ in nil },
         preferenceChanged: { changes.append($0) },
-        connectionAction: { action in
+        connectionAction: { action, id in
+            precondition(id == service.id, "Actions must capture the selected service")
             connectionActions.append(action)
-            preferences.set(action != .resume, forKey: "connectionPaused")
-        }, connect: { _, _ in connections += 1 })
+            service.paused = action != .resume
+            settings.updateServices([service], preferredID: service.id, statuses: [service.id: "Ready"])
+        }, connect: { _, _, _ in connections += 1 })
+    settings.updateServices([service], preferredID: service.id, statuses: [service.id: "Ready"])
     precondition(settings.window!.level == .normal, "Settings must not float over other apps")
     precondition(!settings.window!.styleMask.contains(.fullSizeContentView), "Sidebar must stay below the title bar")
     let tabs = settings.window!.contentView!.subviews.compactMap { $0 as? NSTabView }.first!
@@ -355,12 +360,69 @@ MainActor.assumeIsolated {
     let connectionButtons = tabs.tabViewItems[2].view!.subviews.compactMap { $0 as? NSButton }
     let pause = connectionButtons.first { $0.title == "Disconnect" }!
     pause.performClick(nil)
-    precondition(preferences.bool(forKey: "connectionPaused") && pause.title == "Resume")
+    precondition(service.paused && pause.title == "Resume")
     pause.performClick(nil)
-    precondition(!preferences.bool(forKey: "connectionPaused") && pause.title == "Disconnect")
+    precondition(!service.paused && pause.title == "Disconnect")
     precondition(connectionActions == [.pause, .resume] && connections == 0,
                  "Connection actions must target saved settings, never the edited address draft")
-    let reopened = SettingsWindow(defaults: preferences, recoveryPath: nil, artwork: { _, _, _ in nil }, preferenceChanged: {_ in}, connect: {_,_ in})
+    // Independent registrations: polling must preserve an unfinished Add draft,
+    // and connection controls capture the selected saved service, not text fields.
+    var catalog = ServiceRegistry()
+    let office = try! catalog.register(address: "https://office.example", name: "Office", reapproved: false)
+    let lab = try! catalog.register(address: "http://localhost:8941", name: "Local", reapproved: false)
+    var managed: SettingsWindow!
+    var changedIDs: [String] = []
+    @MainActor func refreshServices() { managed.updateServices(catalog.services, preferredID: catalog.preferredID, statuses: [office.id: "Ready", lab.id: "Unavailable"]) }
+    managed = SettingsWindow(defaults: preferences, recoveryPath: nil, artwork: { _, _, _ in nil }, preferenceChanged: { _ in },
+        connectionAction: { action, id in
+            changedIDs.append(id)
+            var record = catalog.services.first { $0.id == id }!
+            record.paused = action == .pause; catalog.replace(record); refreshServices()
+        }, selectService: { id in catalog.preferredID = id; refreshServices() },
+        renameService: { id, name in
+            var record = catalog.services.first { $0.id == id }!; record.name = name
+            catalog.replace(record); refreshServices()
+        }, connect: { address, _, name in
+            try catalog.register(address: address, name: name, reapproved: false); refreshServices()
+        })
+    refreshServices(); managed.showConnection()
+    let managedTabs = managed.window!.contentView!.subviews.compactMap { $0 as? NSTabView }.first!
+    let page = managedTabs.tabViewItems[2].view!
+    let servicePicker = page.subviews.compactMap { $0 as? NSPopUpButton }.first!
+    let serviceButtons = page.subviews.compactMap { $0 as? NSButton }
+    let addressField = page.subviews.compactMap { $0 as? NSTextField }.first { $0.accessibilityLabel() == "Amplifier address" }!
+    let nameField = page.subviews.compactMap { $0 as? NSTextField }.first { $0.accessibilityLabel() == "Service name" }!
+    precondition(servicePicker.numberOfItems == 2 && !addressField.isEnabled)
+    servicePicker.selectItem(at: 0); NSApp.sendAction(servicePicker.action!, to: servicePicker.target, from: servicePicker)
+    precondition(catalog.preferredID == office.id && addressField.stringValue == office.address)
+    let servicePause = serviceButtons.first { $0.title == "Disconnect" }!
+    servicePause.performClick(nil)
+    precondition(changedIDs == [office.id] && catalog.services[0].paused && !catalog.services[1].paused)
+    servicePause.performClick(nil)
+    serviceButtons.first { $0.title == "Add…" }!.performClick(nil)
+    addressField.stringValue = "https://third.example"; nameField.stringValue = "Third service"
+    refreshServices()
+    precondition(addressField.stringValue == "https://third.example" && nameField.stringValue == "Third service" && addressField.isEnabled)
+    precondition(!servicePause.isEnabled && !serviceButtons.first { $0.title == "Forget…" }!.isEnabled)
+    serviceButtons.first { $0.title == "Use an access token…" }!.performClick(nil)
+    serviceButtons.first { $0.title == "Connect" }!.performClick(nil)
+    precondition(catalog.services.count == 3 && servicePicker.indexOfSelectedItem == 2 && !addressField.isEnabled)
+    precondition(catalog.services[0].id == office.id && catalog.services[1].id == lab.id)
+    nameField.stringValue = "Renamed"; serviceButtons.first { $0.title == "Rename" }!.performClick(nil)
+    precondition(catalog.services[2].name == "Renamed" && catalog.services[2].address == "https://third.example")
+    let multiComposer = TempoComposer(chats: [("a", "Office · New chat"), ("b", "Local · New chat")], anchor: window.frame, includesDefaultNewChat: false)
+    multiComposer.target.selectItem(at: 1); multiComposer.editor.string = "Unsent draft"
+    multiComposer.updateChoices([("a", "Office · New chat"), ("c", "Third · New chat")])
+    precondition(multiComposer.target.titleOfSelectedItem == "Local · New chat" && multiComposer.editor.string == "Unsent draft")
+    multiComposer.onSend = { id, _ in
+        precondition(id == "b", "A disappearing service must not silently retarget a draft")
+        throw ComposerError.unavailable("Local is unavailable; draft kept")
+    }
+    multiComposer.textDidChange(Notification(name: NSText.didChangeNotification))
+    multiComposer.sendButton.performClick(nil); RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+    precondition(multiComposer.editor.isEditable && multiComposer.editor.string == "Unsent draft" && multiComposer.sendButton.isEnabled)
+    print("PASS: independent service selection/pause/add/rename; polling preserves drafts; unavailable compose retains exact destination and text")
+    let reopened = SettingsWindow(defaults: preferences, recoveryPath: nil, artwork: { _, _, _ in nil }, preferenceChanged: {_ in}, connect: {_,_,_ in})
     precondition(reopened.window!.title == "Connection", "Restore last settings pane")
     precondition(TempoControls.statusSymbol(attention: false, working: false) == nil)
     precondition(TempoControls.statusSymbol(attention: true, working: false) != TempoControls.statusSymbol(attention: false, working: true))
@@ -441,7 +503,9 @@ MainActor.assumeIsolated {
                 guard let atlas = NSImage(contentsOf: url)?.cgImage(forProposedRect: nil, context: nil, hints: nil),
                       let image = Optional(AvatarAppearance.thumbnail(atlas, palette: palette, shape: name)) else { return nil }
                 return image
-            }, preferenceChanged: { _ in }, connect: { _, _ in })
+            }, preferenceChanged: { _ in }, connect: { _, _, _ in })
+            styledSettings.updateServices(catalog.services, preferredID: catalog.preferredID, statuses: [office.id: "Ready", lab.id: "Unavailable"])
+            styledSettings.showConnection()
             let styledComposer = TempoComposer(chats: [("chat-1", "Planning a trip")], anchor: window.frame)
             for (name, controller) in [("settings", styledSettings as NSWindowController), ("composer", styledComposer as NSWindowController)] {
                 let sample = controller.window!

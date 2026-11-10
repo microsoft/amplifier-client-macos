@@ -71,3 +71,16 @@ import Converge's formal ledger service, session topology or exact line budgets.
 Future changes to the product promise require approval before implementation.
 This packet records previously approved behavior; it does not certify compliance
 with the whole Converge kit or ratify future device capabilities.
+
+## Multiple-service review (2026-11-10)
+
+Reviewed Unified source `c49ac18f065b9315ead1323d0fa0e33d3e36c0ff`:
+shared-client vision, DC1/4/5/6 and CS1/2/4/5. Those rules already identify host,
+conversation, authority and private view state; no shared contract or wire change
+is required to register several services in one Mac client. The Mac implementation
+extends MR1/3 and MP3. The reviewed source is not a claim of live-host or
+released-package acceptance. Each service still needs the supported companion-v1
+API and its own explicitly approved credential. Unsupported or offline services
+remain independently unavailable. Browser execution enrollment is separate and
+unchanged. Windows can follow the same shared destination/authority promises but
+needs its own registration UI, secure storage and platform qualification.

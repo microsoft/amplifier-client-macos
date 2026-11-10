@@ -47,14 +47,20 @@ enum Keychain {
     private var journal = Journal()
     private var storageReady = false
     private var journalLock: Int32 = -1
-    private var host: HostClient?
-    private var poll: Task<Void, Never>?
+    private var registry = ServiceRegistry()
+    private var registryReady = false
+    private var connections: [String: ServiceConnection] = [:]
+    private var orderedConnections: [ServiceConnection] { registry.services.compactMap { connections[$0.id] } }
+    private var online: [ServiceConnection] { orderedConnections.filter { $0.connected } }
+    private var selected: ServiceConnection? { registry.preferredID.flatMap { connections[$0] } ?? orderedConnections.first }
+    private var bubbleTargets: [String: ServiceTarget] = [:]
+    private var composerTargets: [String: ServiceTarget] = [:]
+    private var nextDetailService = 0
     private var sends = Set<String>()
     private var notificationWaits = Set<String>()
-    private var latest: CompanionSnapshot?
     private var status = "Not connected"
-    private var connected = false
-    private var connecting = false
+    private var connected: Bool { !online.isEmpty }
+    private var connecting: Bool { orderedConnections.contains { $0.connecting } }
     private var notificationStatus = "Checking notification permission…"
     private var notificationError: String?
     private var item: NSStatusItem!
@@ -69,11 +75,6 @@ enum Keychain {
     private var bubblesOpen = false
     private var bubblesManual = false
     private var autoBubblesSuppressed = false
-    private var previews: [String: String] = [:]
-    private var workLabels: [String: WorkPreview] = [:]
-    private var detailRequests = Set<String>()
-    private var nextWorkDetail = 0
-    private var previewAttempts = Set<String>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -88,6 +89,12 @@ enum Keychain {
             journal = try Journal.load(from: journalURL); storageReady = true
         }
         catch { status = "Saved replies could not be read. Open Settings for details." }
+        do {
+            registry = try ServiceRegistry.load(data: defaults.data(forKey: ServiceRegistry.defaultsKey),
+                legacyAddress: defaults.string(forKey: "endpoint"), legacyPaused: defaults.bool(forKey: "connectionPaused"))
+            defaults.set(try JSONEncoder().encode(registry), forKey: ServiceRegistry.defaultsKey)
+            registryReady = true
+        } catch { status = "Saved services could not be read. Existing credentials and replies are kept." }
         UNUserNotificationCenter.current().delegate = self
         let reply = UNTextInputNotificationAction(identifier: "reply", title: "Reply", options: [],
             textInputButtonTitle: "Send", textInputPlaceholder: "Reply to this chat")
@@ -148,11 +155,11 @@ enum Keychain {
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(wake),
             name: NSWorkspace.didWakeNotification, object: nil)
         updater.start()
-        if defaults.string(forKey: "endpoint") == nil { showSettings() }
-        else { connect() }
+        connect()
+        if registry.services.isEmpty { showSettings() }
     }
     func applicationWillTerminate(_ notification: Notification) {
-        poll?.cancel()
+        for connection in orderedConnections { connection.stop() }
         if journalLock >= 0 { Darwin.close(journalLock) }
     }
     @objc private func wake() { connect() }
@@ -161,64 +168,51 @@ enum Keychain {
             userInfo: [NSLocalizedDescriptionKey: "Saved replies could not be loaded. Keep the journal file for recovery; no reply was sent."] ) }
         try journal.save(to: journalURL)
     }
-    private func connect() {
-        poll?.cancel(); closeBubbles(); composer?.close(); composer = nil
-        previews = [:]; workLabels = [:]; detailRequests = []; previewAttempts = []
-        connected = false; connecting = false; latest = nil; host = nil
-        guard !defaults.bool(forKey: "connectionPaused") else {
-            status = "Disconnected. Saved messages are kept."; rebuildMenu(); return
-        }
-        do {
-            let endpoint = try Endpoint(defaults.string(forKey: "endpoint") ?? "http://127.0.0.1:8941")
-            connecting = true; status = "Connecting…"; rebuildMenu()
-            poll = Task { [weak self] in
-                let token: String?
-                do {
-                    token = try await Task.detached { try Keychain.read(endpoint.url.absoluteString) }.value
-                } catch {
-                    guard !Task.isCancelled, let self else { return }
-                    self.connecting = false; self.status = error.localizedDescription; self.rebuildMenu(); return
-                }
-                guard !Task.isCancelled, let self else { return }
-                guard let token, !token.isEmpty else {
-                    self.connecting = false; self.status = "Connect to your Unified host"; self.rebuildMenu(); self.showSettings(); return
-                }
-                do { try self.persist() }
-                catch { self.connecting = false; self.status = error.localizedDescription; self.rebuildMenu(); return }
-                let client = HostClient(endpoint: endpoint, token: token, clientID: self.journal.clientID)
-                self.host = client
-                var delay: UInt64 = 2
-                while !Task.isCancelled {
-                    do {
-                        try await client.attach()
-                        while !Task.isCancelled {
-                            let value = try await client.snapshot()
-                            guard !Task.isCancelled else { return }
-                            self.receive(value, client: client); delay = 2
-                            try await Task.sleep(nanoseconds: 5_000_000_000)
-                        }
-                    } catch {
-                        guard !Task.isCancelled else { return }
-                        self.connected = false; self.connecting = false; self.status = error.localizedDescription
-                        self.rebuildMenu()
-                        try? await Task.sleep(nanoseconds: delay * 1_000_000_000)
-                        delay = min(delay * 2, 60)
-                    }
-                }
-            }
-        } catch { connecting = false; status = error.localizedDescription; rebuildMenu() }
+    private func saveRegistry(_ next: ServiceRegistry) throws {
+        guard registryReady else { throw CompanionError.uncertain }
+        defaults.set(try JSONEncoder().encode(next), forKey: ServiceRegistry.defaultsKey)
+        registry = next
     }
-    private func receive(_ value: CompanionSnapshot, client: HostClient) {
+    private func serviceTitle(_ state: ServiceConnection) -> String {
+        let name = state.registration.displayName
+        return registry.services.filter { $0.displayName == name }.count > 1
+            ? name + " (" + state.registration.address + ")" : name
+    }
+    private func connect() {
+        guard registryReady, storageReady else { rebuildMenu(); return }
+        do { try persist() } catch { status = error.localizedDescription; rebuildMenu(); return }
+        for record in registry.services {
+            let state = connections[record.id] ?? ServiceConnection(record)
+            connections[record.id] = state; state.registration = record
+            state.onSnapshot = { [weak self] state, value, client in self?.receive(value, client: client, state: state) }
+            state.onChange = { [weak self] in self?.rebuildMenu() }
+            start(state)
+        }
+        rebuildMenu()
+    }
+    private func start(_ state: ServiceConnection) {
+        state.start(clientID: journal.clientID, token: { address in
+            try await Task.detached { try Keychain.read(address) }.value
+        })
+    }
+    private func receive(_ value: CompanionSnapshot, client: HostClient, state: ServiceConnection) {
         let value = value.visibleChats { id in
             self.journal.follows(id, endpoint: client.endpoint.url.absoluteString, hostIdentity: value.hostIdentity)
         }
-        latest = value; connected = true; connecting = false
+        guard connections[state.registration.id] === state, state.owns(client) else { return }
+        if state.registration.hostIdentity == nil {
+            var record = state.registration; record.hostIdentity = value.hostIdentity
+            var next = registry; next.replace(record)
+            do { try saveRegistry(next); state.registration = record }
+            catch { state.stop(); state.status = error.localizedDescription; rebuildMenu(); return }
+        }
+        state.latest = value
         let keys = Set(value.items.map(\.key))
-        previews = previews.filter { keys.contains($0.key) }
-        previewAttempts.formIntersection(keys)
+        state.previews = state.previews.filter { keys.contains($0.key) }
+        state.previewAttempts.formIntersection(keys)
         let working = Set(value.sessions.filter { $0.isWorking }.map(\.id))
-        workLabels = workLabels.filter { working.contains($0.key) }
-        status = value.workingCount > 0 ? "\(value.workingCount) working" : "Ready"
+        state.workLabels = state.workLabels.filter { working.contains($0.key) }
+        state.status = value.workingCount > 0 ? "\(value.workingCount) working" : "Ready"
         var next = journal
         let alerts = next.observe(value, endpoint: client.endpoint.url.absoluteString,
             enabled: defaults.bool(forKey: "notifications"), pinnedOnly: !defaults.bool(forKey: "notifyAll"))
@@ -228,9 +222,9 @@ enum Keychain {
             journal = next
             for alert in alerts {
                 Task {
-                    let preview = await responsePreview(alert, client: client, snapshot: value)
-                    guard self.host === client else { return }
-                    self.deliver(alert, snapshot: value, endpoint: client.endpoint, preview: preview)
+                    let preview = await responsePreview(alert, client: client, snapshot: value, state: state)
+                    guard state.owns(client), state.connected else { return }
+                    self.deliver(alert, snapshot: value, endpoint: client.endpoint, preview: preview, serviceName: self.serviceTitle(state))
                 }
             }
         } catch { status = "Could not save notification state; notifications paused." }
@@ -238,15 +232,15 @@ enum Keychain {
         // Only visible running work requests bounded tool labels.
         requestVisibleDetails()
     }
-    private func deliver(_ alert: AttentionItem, snapshot: CompanionSnapshot, endpoint: Endpoint, preview: String?) {
+    private func deliver(_ alert: AttentionItem, snapshot: CompanionSnapshot, endpoint: Endpoint, preview: String?, serviceName: String) {
         let content = UNMutableNotificationContent()
-        content.title = "Amplifier"; content.subtitle = alert.title; content.body = preview ?? alert.summary
+        content.title = registry.services.count > 1 ? "Amplifier · " + serviceName : "Amplifier"; content.subtitle = alert.title; content.body = preview ?? alert.summary
         content.categoryIdentifier = alert.allowsReply ? "response" : "attention"
-        content.threadIdentifier = snapshot.hostIdentity + ":" + alert.sessionId
+        content.threadIdentifier = endpoint.url.absoluteString + "|" + snapshot.hostIdentity + ":" + alert.sessionId
         content.userInfo = ["endpoint": endpoint.url.absoluteString, "host": snapshot.hostIdentity,
                             "session": alert.sessionId, "replyAllowed": alert.allowsReply]
-        let key = endpoint.url.absoluteString + snapshot.hostIdentity + alert.key
-        let id = SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined()
+        let key = try! JSONEncoder().encode([endpoint.url.absoluteString, snapshot.hostIdentity, alert.key])
+        let id = SHA256.hash(data: key).map { String(format: "%02x", $0) }.joined()
         UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: id, content: content, trigger: nil)) { [weak self] error in
             Task { @MainActor in self?.recordNotificationResult(error) }
         }
@@ -324,9 +318,10 @@ enum Keychain {
             defer { notificationWaits.remove(entry.id); rebuildMenu() }
             let deadline = Date().addingTimeInterval(30)
             while !Task.isCancelled {
+                let state = orderedConnections.first { $0.registration.address == entry.endpoint }
                 let decision = NotificationDelivery.decision(for: entry,
-                    endpoint: defaults.string(forKey: "endpoint"), hostIdentity: latest?.hostIdentity,
-                    connected: connected, paused: defaults.bool(forKey: "connectionPaused"), expired: Date() >= deadline)
+                    endpoint: state?.registration.address, hostIdentity: state?.latest?.hostIdentity,
+                    connected: state?.connected == true, paused: state?.registration.paused ?? true, expired: Date() >= deadline)
                 switch decision {
                 case .send:
                     notificationWaits.remove(entry.id); send(entry); return
@@ -342,7 +337,9 @@ enum Keychain {
         }
     }
     private func send(_ entry: PendingReply) {
-        guard let host, !sends.contains(entry.id), !notificationWaits.contains(entry.id) else { status = "Reply saved. Connect to its host, then use Retry."; rebuildMenu(); return }
+        guard let state = orderedConnections.first(where: { $0.registration.address == entry.endpoint }),
+              state.connected, !state.registration.paused, state.latest?.hostIdentity == entry.hostIdentity,
+              let host = state.client, !sends.contains(entry.id), !notificationWaits.contains(entry.id) else { status = "Reply saved. Connect to its host, then use Retry."; rebuildMenu(); return }
         do { try persist() } catch { status = error.localizedDescription; rebuildMenu(); return }
         sends.insert(entry.id); status = "Sending reply…"; rebuildMenu()
         Task {
@@ -360,51 +357,67 @@ enum Keychain {
     }
     private func rebuildMenu() {
         guard item != nil else { return }
-        settings?.updateConnection(connected: connected, message: status)
+        updateSettingsServices()
         let menu = NSMenu()
-        let unread = connected ? (latest?.items.filter { included($0) }.count ?? 0) : 0
-        let work = latest?.workingCount ?? 0
-        sprite.update(connected: connected, connecting: connecting, working: work,
-            items: latest?.items.filter { included($0) } ?? [],
-            scope: (defaults.string(forKey: "endpoint") ?? "") + ":" + (latest?.hostIdentity ?? ""))
-        let summary = !connected ? "Not connected" : (unread > 0 ? "\(unread) updates" + (work > 0 ? " · \(work) working" : "") : "")
-        if !summary.isEmpty { menu.addItem(withTitle: summary, action: nil, keyEquivalent: "").isEnabled = false }
+        let attention = online.flatMap { state in
+            (state.latest?.items.filter { included($0, state: state) } ?? []).map {
+                $0.scoped(to: state.registration.id + ":" + (state.latest?.hostIdentity ?? ""))
+            }
+        }
+        let unread = attention.count
+        let work = online.reduce(0) { $0 + ($1.latest?.workingCount ?? 0) }
+        let unavailable = orderedConnections.filter { !$0.connected && !$0.registration.paused }.count
+        let detail = connected ? "\(unread) updates · \(work) working" + (unavailable > 0 ? " · \(unavailable) unavailable" : "") : "No services connected"
+        sprite.update(connected: connected, connecting: connecting, working: work, items: attention, scope: "services")
+        menu.addItem(withTitle: detail, action: nil, keyEquivalent: "").isEnabled = false
         let compose = menu.addItem(withTitle: "New message…", action: #selector(newMessage), keyEquivalent: "n")
         compose.target = self; compose.isEnabled = connected
         menu.addItem(withTitle: "Open Amplifier", action: #selector(openHost), keyEquivalent: "o").target = self
-        if let latest {
-            item.button?.title = ""
-            menuAttention.isHidden = unread == 0
-            item.button?.toolTip = "\(unread) updates · \(work) chats working"
-            if !latest.sessions.isEmpty {
-                let chats = menu.addItem(withTitle: "Your chats", action: nil, keyEquivalent: "")
-                let attentionChats = Set(latest.items.filter { included($0) }.map(\.sessionId))
-                chats.image = TempoControls.statusImage(attention: unread > 0, working: work > 0)
-                let list = NSMenu()
-                for chat in latest.sessions.prefix(8) {
-                    let title = String(chat.title.prefix(55))
-                    let row = list.addItem(withTitle: title, action: #selector(openChat(_:)), keyEquivalent: "")
-                    row.image = TempoControls.statusImage(attention: attentionChats.contains(chat.id), working: chat.isWorking)
-                    row.toolTip = attentionChats.contains(chat.id) ? (chat.isWorking ? "Update available · Working" : "Update available") : (chat.isWorking ? "Working" : "No new updates")
-                    row.representedObject = chat.id; row.target = self
-                }
-                chats.submenu = list
+        item.button?.title = ""; menuAttention.isHidden = unread == 0; item.button?.toolTip = detail
+        let services = menu.addItem(withTitle: "Services", action: nil, keyEquivalent: "")
+        let serviceMenu = NSMenu(); serviceMenu.autoenablesItems = false
+        for state in orderedConnections {
+            let row = serviceMenu.addItem(withTitle: serviceTitle(state) + " · " + state.status, action: #selector(selectService(_:)), keyEquivalent: "")
+            row.representedObject = state.registration.id; row.target = self
+            row.state = state.registration.id == registry.preferredID ? .on : .off
+            row.toolTip = state.registration.address + " · Use as the default for opening Amplifier and new chats"
+        }
+        serviceMenu.addItem(.separator())
+        let manage = serviceMenu.addItem(withTitle: "Manage services…", action: #selector(showServiceSettings), keyEquivalent: ""); manage.target = self
+        services.submenu = serviceMenu
+        let chats = menu.addItem(withTitle: "Your chats", action: nil, keyEquivalent: "")
+        chats.image = TempoControls.statusImage(attention: unread > 0, working: work > 0)
+        let list = NSMenu()
+        for state in online {
+            guard let snapshot = state.latest else { continue }
+            let attentionChats = Set(snapshot.items.filter { included($0, state: state) }.map(\.sessionId))
+            let destination: NSMenu
+            if registry.services.count > 1 {
+                let group = list.addItem(withTitle: serviceTitle(state), action: nil, keyEquivalent: "")
+                destination = NSMenu(); group.submenu = destination
+            } else { destination = list }
+            for chat in snapshot.sessions.prefix(8) {
+                let row = destination.addItem(withTitle: String(chat.title.prefix(55)), action: #selector(openChat(_:)), keyEquivalent: "")
+                row.image = TempoControls.statusImage(attention: attentionChats.contains(chat.id), working: chat.isWorking)
+                row.representedObject = ServiceTarget(service: state.registration, hostIdentity: snapshot.hostIdentity, sessionID: chat.id)
+                row.toolTip = serviceTitle(state) + " · " + chat.title; row.target = self
             }
-        } else { item.button?.title = ""; menuAttention.isHidden = true }
+        }
+        chats.submenu = list
         let pending = journal.replies.filter { $0.status != "accepted" }
         if !pending.isEmpty {
             let saved = menu.addItem(withTitle: "Saved messages (\(pending.count))", action: nil, keyEquivalent: "")
             let list = NSMenu()
             list.addItem(withTitle: "Check the chat before retrying", action: nil, keyEquivalent: "").isEnabled = false
             for entry in pending.prefix(10) {
-                let row = list.addItem(withTitle: String(entry.text.prefix(40)), action: nil, keyEquivalent: "")
+                let row = list.addItem(withTitle: (registry.services.count > 1 ? (registry.service(address: entry.endpoint)?.displayName ?? entry.endpoint) + " · " : "") + String(entry.text.prefix(40)), action: nil, keyEquivalent: "")
                 let actions = NSMenu(); actions.autoenablesItems = false
                 let review = actions.addItem(withTitle: "Review saved message…", action: #selector(reviewReply(_:)), keyEquivalent: "")
                 review.representedObject = entry.id; review.target = self
                 let view = actions.addItem(withTitle: "Open chat", action: #selector(openReplyChat(_:)), keyEquivalent: "")
                 view.representedObject = entry.id; view.target = self
                 let retry = actions.addItem(withTitle: "Retry message", action: #selector(retry(_:)), keyEquivalent: "")
-                retry.representedObject = entry.id; retry.target = self; retry.isEnabled = !sends.contains(entry.id) && !notificationWaits.contains(entry.id) && connected && entry.endpoint == host?.endpoint.url.absoluteString && entry.hostIdentity == latest?.hostIdentity
+                retry.representedObject = entry.id; retry.target = self; retry.isEnabled = !sends.contains(entry.id) && !notificationWaits.contains(entry.id) && online.contains { $0.registration.address == entry.endpoint && $0.latest?.hostIdentity == entry.hostIdentity }
                 row.submenu = actions
             }
             saved.submenu = list
@@ -427,10 +440,10 @@ enum Keychain {
         }
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Amplifier", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        item.menu = menu; sprite.setAccessibilityLabel("Amplifier: " + status)
+        item.menu = menu; sprite.setAccessibilityLabel("Amplifier: " + detail)
         surface.updateStatus(connected: connected, working: work, unread: unread,
-                             error: latest?.items.contains { included($0) && $0.isError } ?? false,
-                             detail: connected ? status : "Not connected")
+                             error: attention.contains { $0.isError },
+                             detail: detail)
         surface.setActivityAvailable(connected && (unread > 0 || (defaults.bool(forKey: "workBubbles") && work > 0)))
         refreshBubbles()
         surface.setBubblesVisible(bubblesOpen)
@@ -443,56 +456,72 @@ enum Keychain {
         hide.image = NSImage(systemSymbolName: "eye.slash", accessibilityDescription: nil); hide.target = self
         return menu
     }
-    private func included(_ item: AttentionItem) -> Bool {
+    private func included(_ item: AttentionItem, state: ServiceConnection) -> Bool {
         defaults.bool(forKey: "notifyAll") || item.pinned || journal.follows(item.sessionId,
-            endpoint: host?.endpoint.url.absoluteString ?? "", hostIdentity: latest?.hostIdentity ?? "")
+            endpoint: state.registration.address, hostIdentity: state.latest?.hostIdentity ?? "")
     }
     private func showComposer() {
-        guard connected, let client = host, let snapshot = latest else { showSettings(); return }
+        guard connected else { showServiceSettings(); return }
+        var choices: [(String, String)] = []
+        let states = online.sorted { ($0.registration.id == registry.preferredID ? 0 : 1) < ($1.registration.id == registry.preferredID ? 0 : 1) }
+        for state in states {
+            guard let snapshot = state.latest else { continue }
+            let prefix = registry.services.count > 1 ? serviceTitle(state) + " · " : ""
+            let new = ServiceTarget(service: state.registration, hostIdentity: snapshot.hostIdentity, sessionID: nil)
+            composerTargets[new.key] = new; choices.append((new.key, prefix + "New chat"))
+            for chat in snapshot.sessions.prefix(30) {
+                let target = ServiceTarget(service: state.registration, hostIdentity: snapshot.hostIdentity, sessionID: chat.id)
+                composerTargets[target.key] = target; choices.append((target.key, prefix + chat.title))
+            }
+        }
         if let composer {
-            surface.setComposing(true); composer.present(); positionBubbles(); return
+            composer.updateChoices(choices); composer.present(); surface.setComposing(true); return
         }
-        var chats = snapshot.sessions.map { ($0.id, $0.title) }
-        for reply in journal.replies.reversed() where reply.endpoint == client.endpoint.url.absoluteString && reply.hostIdentity == snapshot.hostIdentity {
-            if !chats.contains(where: { $0.0 == reply.sessionID }) { chats.append((reply.sessionID, "New chat · " + String(reply.text.prefix(35)))) }
-            if chats.count >= 30 { break }
+        let compose = TempoComposer(chats: choices, anchor: panel.frame, includesDefaultNewChat: false)
+        compose.titleForTarget = { [weak self] key in
+            guard let self, let target = self.composerTargets[key], let state = self.connections[target.serviceID] else { return nil }
+            return self.serviceTitle(state) + " · This chat"
         }
-        let compose = TempoComposer(chats: Array(chats.prefix(30)), anchor: panel.frame)
-        compose.onSend = { [weak self] target, text in
-            guard let self, self.host === client, self.latest?.hostIdentity == snapshot.hostIdentity else { throw CompanionError.changedHost }
-            try self.persist()
+        compose.onSend = { [weak self] key, text in
+            guard let self, let key, let target = self.composerTargets[key],
+                  let state = self.connections[target.serviceID], state.connected,
+                  target.matches(service: state.registration, hostIdentity: state.latest?.hostIdentity),
+                  let client = state.client else { throw ComposerError.unavailable("This service is unavailable or changed. Your draft is kept; reconnect or choose a destination.") }
             var next = self.journal
-            let entry = next.compose(endpoint: client.endpoint.url.absoluteString, hostIdentity: snapshot.hostIdentity, sessionID: target, text: text)
-            try next.save(to: self.journalURL); self.journal = next
+            let entry = next.compose(endpoint: target.address, hostIdentity: target.hostIdentity, sessionID: target.sessionID, text: text)
+            do {
+                guard self.storageReady else { throw CompanionError.uncertain }
+                try next.save(to: self.journalURL); self.journal = next
+            } catch { throw ComposerError.unavailable("Could not save this message. Your draft is kept; nothing was sent.") }
             self.sends.insert(entry.id); self.rebuildMenu()
             defer { self.sends.remove(entry.id); self.rebuildMenu() }
             do {
                 try await client.send(entry)
                 self.journal.mark(entry.id, "accepted"); try self.persist()
-                self.status = "Message sent"
-                return entry.sessionID
+                let follow = ServiceTarget(service: state.registration, hostIdentity: target.hostIdentity, sessionID: entry.sessionID)
+                self.composerTargets[follow.key] = follow
+                return follow.key
             } catch {
-                self.journal.mark(entry.id, "unconfirmed"); try? self.persist()
-                throw CompanionError.uncertain
+                self.journal.mark(entry.id, "unconfirmed"); try? self.persist(); throw CompanionError.uncertain
             }
         }
-        compose.onClose = { [weak self] in self?.surface.setComposing(false) }
+        compose.onClose = { [weak self, weak compose] in
+            self?.surface.setComposing(false)
+            if compose?.canDiscardOnClose == true { self?.composer = nil; self?.composerTargets = [:] }
+        }
         compose.onResize = { [weak self] in self?.positionBubbles() }
-        composer = compose
-        surface.setComposing(true)
-
-        compose.present(); positionBubbles()
+        composer = compose; surface.setComposing(true); compose.present(); positionBubbles()
     }
-    private func responsePreview(_ alert: AttentionItem, client: HostClient, snapshot: CompanionSnapshot) async -> String? {
+    private func responsePreview(_ alert: AttentionItem, client: HostClient, snapshot: CompanionSnapshot, state: ServiceConnection) async -> String? {
         guard alert.allowsReply else { return nil }
-        if let cached = previews[alert.key] { return cached }
-        guard previewAttempts.insert(alert.key).inserted else { return nil }
+        if let cached = state.previews[alert.key] { return cached }
+        guard state.previewAttempts.insert(alert.key).inserted else { return nil }
         guard let text = try? await client.responsePreview(sessionID: alert.sessionId),
               let check = try? await client.snapshot(), check.hostIdentity == snapshot.hostIdentity,
-              check.items.contains(where: { $0.key == alert.key }), self.host === client else { return nil }
+              check.items.contains(where: { $0.key == alert.key }), state.owns(client), state.connected else { return nil }
         // Do not mix an older completion with text from a new in-progress turn.
         guard !check.sessions.contains(where: { $0.id == alert.sessionId && $0.isWorking }) else { return nil }
-        previews[alert.key] = text
+        state.previews[alert.key] = text
         refreshBubbles()
         return text
     }
@@ -518,78 +547,100 @@ enum Keychain {
     }
     /// Keep ongoing work visible without adding it to the attention count.
     private func activityRows() -> [TempoBubbles.Row] {
-        guard connected, let latest else { return [] }
-        var rows = latest.items.filter { included($0) }.map { item in
-            let session = latest.sessions.first { $0.id == item.sessionId }
-            let status = NoticeStatus.attention(kind: item.kind, working: session?.isWorking == true)
-            // A new turn must not look like it is still performing the unread answer.
-            // Keep the unread meaning while showing the current observed action.
-            let detail = status == .working
-                ? "Unread · " + (workLabels[item.sessionId]?.text ?? WorkPreview.fallback(status: session?.status ?? "working"))
-                : previews[item.key] ?? item.summary
-            return TempoBubbles.Row(key: item.key, title: item.title, detail: detail, sessionID: item.sessionId, status: status, dismissalState: item.key)
-        }
-        let noticed = Set(rows.map(\.sessionID))
-        if defaults.bool(forKey: "workBubbles") {
-            rows += latest.sessions.filter { $0.isWorking && !noticed.contains($0.id) }.map {
-                TempoBubbles.Row(key: "work:" + $0.id, title: $0.title, detail: workLabels[$0.id]?.text ?? WorkPreview.fallback(status: $0.status), sessionID: $0.id, status: .working, dismissalState: "work|" + $0.status + "|" + (workLabels[$0.id]?.stateID ?? ""))
+        var all: [TempoBubbles.Row] = []; bubbleTargets = [:]
+        var saved = defaults.dictionary(forKey: "dismissedTempoNotices") as? [String: String] ?? [:]
+        let original = saved
+        for state in online {
+            guard let latest = state.latest else { continue }
+            let prefix = state.registration.address + "|" + latest.hostIdentity + "|"
+            let label = registry.services.count > 1 ? serviceTitle(state) + " · " : ""
+            func route(_ id: String) -> String {
+                let target = ServiceTarget(service: state.registration, hostIdentity: latest.hostIdentity, sessionID: id)
+                bubbleTargets[target.key] = target; return target.key
             }
+            let items = latest.items.filter { included($0, state: state) }
+            var rows = items.map { item in
+                let session = latest.sessions.first { $0.id == item.sessionId }
+                let status = NoticeStatus.attention(kind: item.kind, working: session?.isWorking == true)
+                let detail = status == .working ? "Unread · " + (state.workLabels[item.sessionId]?.text ?? WorkPreview.fallback(status: session?.status ?? "working")) : state.previews[item.key] ?? item.summary
+                return TempoBubbles.Row(key: prefix + item.key, title: item.title, detail: label + detail, sessionID: route(item.sessionId), status: status, dismissalState: item.key)
+            }
+            let noticed = Set(items.map(\.sessionId))
+            if defaults.bool(forKey: "workBubbles") {
+                rows += latest.sessions.filter { $0.isWorking && !noticed.contains($0.id) }.map {
+                    TempoBubbles.Row(key: prefix + "work:" + $0.id, title: $0.title,
+                        detail: label + (state.workLabels[$0.id]?.text ?? WorkPreview.fallback(status: $0.status)),
+                        sessionID: route($0.id), status: .working,
+                        dismissalState: "work|" + $0.status + "|" + (state.workLabels[$0.id]?.stateID ?? ""))
+                }
+            }
+            let scoped = saved.filter { $0.key.hasPrefix(prefix) }
+            let kept = NoticeDismissal.reconcile(scoped, current: Dictionary(uniqueKeysWithValues: rows.map { ($0.key, $0.dismissalState) }))
+            saved = saved.filter { !$0.key.hasPrefix(prefix) }; saved.merge(kept) { _, new in new }
+            all += rows.filter { kept[$0.key] == nil }
         }
-        let scope = (host?.endpoint.url.absoluteString ?? "") + "|" + latest.hostIdentity
-        let stored = defaults.dictionary(forKey: "dismissedTempoNotices") as? [String: String] ?? [:]
-        let prefix = scope + "|"
-        let current = Dictionary(uniqueKeysWithValues: rows.map { (prefix + $0.key, $0.dismissalState) })
-        let saved = NoticeDismissal.reconcile(stored, current: current)
-        if saved != stored { defaults.set(saved, forKey: "dismissedTempoNotices") }
-        return rows.filter { saved[prefix + $0.key] == nil }
+        // Offline services retain their dismissal records until they can reconcile.
+        if saved != original { defaults.set(saved, forKey: "dismissedTempoNotices") }
+        return all
     }
     private func refreshBubbles() {
-        guard connected, let latest, let client = host, panel.isVisible else { closeBubbles(); return }
-        if latest.workingCount == 0 { autoBubblesSuppressed = false }
-        let automatic = defaults.bool(forKey: "workBubbles") && latest.workingCount > 0 && !autoBubblesSuppressed
-        if automatic { bubblesOpen = true }
+        guard connected, panel.isVisible else { closeBubbles(); return }
+        let work = online.reduce(0) { $0 + ($1.latest?.workingCount ?? 0) }
+        if work == 0 { autoBubblesSuppressed = false }
+        if defaults.bool(forKey: "workBubbles") && work > 0 && !autoBubblesSuppressed { bubblesOpen = true }
         guard bubblesOpen else { return }
         let rows = activityRows()
         if rows.isEmpty { closeBubbles(); return }
-        bubbles.openChat = { id in WebAppOpener.open(client.endpoint.chatURL(id)) }
+        bubbles.openChat = { [weak self] key in
+            guard let self, let target = self.bubbleTargets[key] else { return }
+            self.open(target)
+        }
         bubbles.dismiss = { [weak self] row in
-            guard let self, self.host === client, self.latest?.hostIdentity == latest.hostIdentity else { return }
+            guard let self, self.bubbleTargets[row.sessionID] != nil else { return }
             var saved = self.defaults.dictionary(forKey: "dismissedTempoNotices") as? [String: String] ?? [:]
-            saved[client.endpoint.url.absoluteString + "|" + latest.hostIdentity + "|" + row.key] = row.dismissalState
+            saved[row.key] = row.dismissalState
             self.defaults.set(saved, forKey: "dismissedTempoNotices"); self.refreshBubbles()
         }
-        bubbles.update(rows, anchor: panel, keepExisting: bubblesManual, attentionCount: latest.items.filter { included($0) }.count)
+        let count = online.reduce(0) { count, state in count + (state.latest?.items.filter { included($0, state: state) }.count ?? 0) }
+        bubbles.update(rows, anchor: panel, keepExisting: bubblesManual, attentionCount: count)
         surface.setBubblesVisible(true)
     }
     private func requestVisibleDetails() {
-        guard connected, panel.isVisible, let latest, let client = host else { return }
-        for alert in latest.items.filter({ bubblesOpen && included($0) && $0.allowsReply }).prefix(10) where previews[alert.key] == nil && !previewAttempts.contains(alert.key) {
-            let key = "response:" + alert.key
-            guard detailRequests.insert(key).inserted else { continue }
-            Task {
-                _ = await responsePreview(alert, client: client, snapshot: latest)
-                if self.host === client { detailRequests.remove(key) }
+        guard panel.isVisible, !online.isEmpty else { return }
+        // Rotate the starting service; one host cannot monopolize the five work reads.
+        let states = online, start = nextDetailService % online.count
+        nextDetailService = (start + 1) % states.count
+        for offset in states.indices {
+            let state = states[(start + offset) % states.count]
+            guard let latest = state.latest, let client = state.client else { continue }
+            for alert in latest.items.filter({ bubblesOpen && included($0, state: state) && $0.allowsReply }).prefix(10)
+                where state.previews[alert.key] == nil && !state.previewAttempts.contains(alert.key) {
+                if orderedConnections.reduce(0, { $0 + $1.detailRequests.filter { $0.hasPrefix("response:") }.count }) >= 10 { break }
+                let key = "response:" + alert.key
+                guard state.detailRequests.insert(key).inserted else { continue }
+                Task {
+                    _ = await responsePreview(alert, client: client, snapshot: latest, state: state)
+                    if state.owns(client) { state.detailRequests.remove(key) }
+                }
             }
-        }
-        guard defaults.bool(forKey: "workBubbles") else { return }
-        let working = latest.sessions.filter { $0.isWorking }
-        guard !working.isEmpty else { return }
-        let start = nextWorkDetail % working.count
-        nextWorkDetail = (start + min(5, working.count)) % working.count
-        for offset in 0..<min(5, working.count) {
-            if detailRequests.filter({ $0.hasPrefix("work:") }).count >= 5 { break }
-            let chat = working[(start + offset) % working.count]
-            let key = "work:" + chat.id
-            guard detailRequests.insert(key).inserted else { continue }
-            Task {
-                defer { if self.host === client { detailRequests.remove(key) } }
-                do {
-                    let text = try await client.workPreview(sessionID: chat.id)
-                    guard self.host === client,
-                          self.latest?.sessions.contains(where: { $0.id == chat.id && $0.isWorking }) == true else { return }
-                    workLabels[chat.id] = text
-                    refreshBubbles()
-                } catch { /* Keep the last known action on a failed read. */ }
+            guard defaults.bool(forKey: "workBubbles") else { continue }
+            let working = latest.sessions.filter { $0.isWorking }
+            guard !working.isEmpty else { continue }
+            let start = state.nextWorkDetail % working.count
+            state.nextWorkDetail = (start + min(5, working.count)) % working.count
+            for offset in 0..<min(5, working.count) {
+                if orderedConnections.reduce(0, { $0 + $1.detailRequests.filter { $0.hasPrefix("work:") }.count }) >= 5 { break }
+                let chat = working[(start + offset) % working.count], key = "work:" + working[(start + offset) % working.count].id
+                guard state.detailRequests.insert(key).inserted else { continue }
+                Task {
+                    defer { if state.owns(client) { state.detailRequests.remove(key) } }
+                    do {
+                        let text = try await client.workPreview(sessionID: chat.id)
+                        guard state.owns(client), state.connected,
+                              state.latest?.sessions.contains(where: { $0.id == chat.id && $0.isWorking }) == true else { return }
+                        state.workLabels[chat.id] = text; refreshBubbles()
+                    } catch { }
+                }
             }
         }
     }
@@ -609,18 +660,35 @@ enum Keychain {
         alert.addButton(withTitle: "Done"); alert.addButton(withTitle: "Open chat")
         if alert.runModal() == .alertSecondButtonReturn { openReplyChat(sender) }
     }
-    private func changeConnection(_ action: ConnectionAction) throws {
-        guard sends.isEmpty && notificationWaits.isEmpty else {
-            throw NSError(domain: "Tempo", code: 3, userInfo: [NSLocalizedDescriptionKey: "Wait for the current message delivery to finish before changing this connection."])
+    private func requireIdle(_ address: String) throws {
+        guard !journal.replies.contains(where: { $0.endpoint == address && (sends.contains($0.id) || notificationWaits.contains($0.id)) }) else {
+            throw NSError(domain: "Tempo", code: 3, userInfo: [NSLocalizedDescriptionKey: "Wait for this service's current message delivery to finish."])
         }
-        guard let address = defaults.string(forKey: "endpoint") else { return }
-        if action == .resume {
-            guard try Keychain.read(address)?.isEmpty == false else {
-                throw NSError(domain: "Tempo", code: 2, userInfo: [NSLocalizedDescriptionKey: "Connect in browser to approve this Mac again."])
-            }
-        } else if action == .forget { try Keychain.remove(for: address) }
-        defaults.set(action != .resume, forKey: "connectionPaused")
-        connect()
+    }
+    private func changeConnection(_ action: ConnectionAction, id: String) throws {
+        guard registryReady, let state = connections[id] else { return }
+        let address = state.registration.address; try requireIdle(address)
+        if action == .resume, try Keychain.read(address)?.isEmpty != false { throw CompanionError.rejected(401) }
+        var next = registry
+        if action == .forget {
+            try Keychain.remove(for: address); next.remove(id)
+        } else {
+            var record = state.registration; record.paused = action == .pause; next.replace(record)
+        }
+        try saveRegistry(next)
+        if action == .forget { state.stop(); connections.removeValue(forKey: id) }
+        else { state.registration = registry.services.first { $0.id == id }!; start(state) }
+        rebuildMenu()
+    }
+    @objc private func selectService(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String, registry.services.contains(where: { $0.id == id }) else { return }
+        do { var next = registry; next.preferredID = id; try saveRegistry(next); rebuildMenu() }
+        catch { status = error.localizedDescription; rebuildMenu() }
+    }
+    private func open(_ target: ServiceTarget) {
+        guard let state = connections[target.serviceID], state.connected,
+              target.matches(service: state.registration, hostIdentity: state.latest?.hostIdentity) else { return }
+        WebAppOpener.open(target.url)
     }
     @objc private func retry(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String,
@@ -634,14 +702,15 @@ enum Keychain {
         WebAppOpener.open(url)
     }
     @objc private func openChat(_ sender: NSMenuItem) {
-        guard let id = sender.representedObject as? String, let url = host?.endpoint.chatURL(id) else { return }
-        WebAppOpener.open(url)
+        guard let target = sender.representedObject as? ServiceTarget else { return }
+        open(target)
     }
     @objc private func openHost() {
-        if let endpoint = try? Endpoint(defaults.string(forKey: "endpoint") ?? "http://127.0.0.1:8941") { WebAppOpener.open(endpoint.url, focusExisting: true) }
+        if let selected { WebAppOpener.open(selected.registration.endpoint.url, focusExisting: true) }
+        else { showServiceSettings() }
     }
     @objc private func chooseBrowserProfile() {
-        if let endpoint = try? Endpoint(defaults.string(forKey: "endpoint") ?? "http://127.0.0.1:8941") { WebAppOpener.chooseProfile(for: endpoint.url) }
+        if let selected { WebAppOpener.chooseProfile(for: selected.registration.endpoint.url) }
     }
     @objc private func toggleTempo() {
         composer?.close(); closeBubbles()
@@ -673,6 +742,12 @@ enum Keychain {
         }
         rebuildMenu(); requestVisibleDetails()
     }
+    private func updateSettingsServices() {
+        settings?.updateServices(registry.services, preferredID: registry.preferredID,
+            statuses: Dictionary(uniqueKeysWithValues: orderedConnections.map { ($0.registration.id, $0.status) }),
+            catalogError: registryReady ? nil : "Saved services could not be read. Existing credentials and replies are kept. Keep your settings for recovery before trying again.")
+    }
+    @objc private func showServiceSettings() { showSettings(); settings?.showConnection() }
     @objc private func showSettings() {
         if settings == nil {
             settings = SettingsWindow(defaults: defaults, recoveryPath: storageReady ? nil : journalURL.path,
@@ -681,7 +756,18 @@ enum Keychain {
                           let source = NSImage(contentsOf: url)?.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
                     return AvatarAppearance.thumbnail(source, palette: palette, shape: name)
                 }, preferenceChanged: { [weak self] key in self?.preferenceChanged(key) },
-                connectionAction: { [weak self] action in try self?.changeConnection(action) },
+                connectionAction: { [weak self] action, id in try self?.changeConnection(action, id: id) },
+                selectService: { [weak self] id in
+                    guard let self, self.registry.services.contains(where: { $0.id == id }) else { return }
+                    var next = self.registry; next.preferredID = id
+                    try self.saveRegistry(next); self.rebuildMenu()
+                },
+                renameService: { [weak self] id, name in
+                    guard let self, let state = self.connections[id] else { return }
+                    var record = state.registration; record.name = NoticeText.plain(name, limit: 60)
+                    var next = self.registry; next.replace(record); try self.saveRegistry(next)
+                    state.registration = record; self.rebuildMenu()
+                },
                 manageDevices: { address in
                     let endpoint = try Endpoint(address)
                     NSWorkspace.shared.open(endpoint.route("devices"))
@@ -706,22 +792,25 @@ enum Keychain {
                         if let token = try await client.poll(id: request.id, verifier: verifier) { return token }
                     }
                     throw PairingError.expired
-                }, connect: { [weak self] address, token in
-                    guard let self else { return }
-                    guard self.sends.isEmpty && self.notificationWaits.isEmpty else {
-                        throw NSError(domain: "Tempo", code: 3, userInfo: [NSLocalizedDescriptionKey: "Wait for the current message delivery to finish before changing this connection."])
-                    }
+                }, connect: { [weak self] address, token, name in
+                    guard let self, self.registryReady, self.storageReady else { throw CompanionError.uncertain }
                     let endpoint = try Endpoint(address)
-                    if !token.isEmpty { try Keychain.save(token, for: endpoint.url.absoluteString) }
-                    guard try Keychain.read(endpoint.url.absoluteString)?.isEmpty == false else {
-                        throw NSError(domain: "Tempo", code: 2, userInfo: [NSLocalizedDescriptionKey: "Enter an access token for this Amplifier."])
-                    }
-                    self.defaults.set(endpoint.url.absoluteString, forKey: "endpoint")
-                    self.defaults.set(false, forKey: "connectionPaused")
-                    self.connect()
+                    let saved = self.registry.service(address: endpoint.url.absoluteString)
+                    let account = saved?.address ?? endpoint.url.absoluteString
+                    try self.requireIdle(account)
+                    var next = self.registry
+                    let record = try next.register(address: account, name: name, reapproved: !token.isEmpty)
+                    if !token.isEmpty { try Keychain.save(token, for: account) }
+                    guard try Keychain.read(account)?.isEmpty == false else { throw CompanionError.rejected(401) }
+                    try self.saveRegistry(next)
+                    let state = self.connections[record.id] ?? ServiceConnection(record)
+                    self.connections[record.id] = state; state.registration = record
+                    state.onSnapshot = { [weak self] state, value, client in self?.receive(value, client: client, state: state) }
+                    state.onChange = { [weak self] in self?.rebuildMenu() }
+                    self.start(state); self.rebuildMenu()
                 })
         }
-        settings?.updateConnection(connected: connected, message: status)
+        updateSettingsServices()
         if !connected { settings?.showConnection() }
         settings?.showWindow(nil); NSApp.activate(ignoringOtherApps: true)
     }

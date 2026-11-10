@@ -127,3 +127,27 @@ Native surface checks pass independent title/detail geometry and card hit routin
 plus the prior scroll/dismiss/resize/placement assertions. These isolated synthetic
 checks do not establish a new signed installation, live service acceptance or
 manual VoiceOver coverage. Publication and adoption remain separate.
+
+## Multiple-service successor (2026-11-10)
+
+User-requested MR1/MR3 and MP3 additions register independent services and combine
+current visibility. Shared CS1/2/4/5 and DC1/4/5/6 remain unchanged; see the current
+[reviewed contract source](compatibility.md#multiple-service-review-2026-11-10).
+No server deployment or additional device authority is part of this change.
+
+Component evidence: 48 core checks, including seven multi-service cases for legacy
+migration/empty catalog recovery, origin aliases and independent ports, corrupt
+catalog preservation, captured destination isolation, colliding chat/notification
+IDs, independent success/failure and pause, canceled credential resolution and
+host replacement. Native AppKit checks cover service selection/default,
+per-service pause, Add and Rename, polling while a draft is being edited, captured
+composer destinations and retained editable input when a service is unavailable.
+The existing notice layout/scroll/dismiss/resize checks also pass. Universal
+arm64/x86_64 source build passes on the development Mac toolchain.
+
+These are synthetic transport and native component checks, not simultaneous
+pairing against the user's services, notification permission/Keychain migration
+on an installed successor, multi-PWA physical navigation, manual VoiceOver, or a
+signed upgrade. Offscreen AppKit bitmap capture omits some composited native
+controls and is not visual acceptance. MAC1/MAC3/MAC4 retain those limits.
+The existing released installation, credentials and host services were not changed.

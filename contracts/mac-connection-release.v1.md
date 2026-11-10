@@ -24,8 +24,12 @@ Signed candidate -> notarization / Gatekeeper / upgrade qualification -> release
 1. **MR1 — Protect the approved connection.** Use Unified's browser approval seam
    and macOS Keychain. Failed/cancelled approval preserves the saved connection;
    the disclosed manual-token fallback retains its broader authority.
+   Register services independently; adding one preserves the others. Scope
+   credentials, health, retries and observations to the exact service. Migrate
+   the existing single registration without copying credentials.
    Broken: a credential enters a URL, log or preferences file, or a failed setup
-   replaces the saved host. Affected: people connecting to their own host.
+   replaces a saved host.
+   Affected: people connecting to one or several hosts.
 
 2. **MR2 — Save intent before delivery.** Implement CS1/4 and DC6 with the private
    journal before sending. A fresh explicit startup reply may wait up to 30 seconds
@@ -36,6 +40,9 @@ Signed candidate -> notarization / Gatekeeper / upgrade qualification -> release
 3. **MR3 — Connection controls preserve work.** Disconnect persists a pause;
    Resume uses the saved credential. Confirmed Forget removes that local credential
    while retaining messages/preferences and explaining separate host revocation.
+   These actions apply only to the named service. An unavailable service cannot
+   block healthy services or make their activity disappear. A default selection
+   cannot retarget a captured draft, notification reply or saved command.
    Broken: Forget deletes a draft or connection changes retarget an in-flight send.
    Affected: people managing connected devices.
 
@@ -80,3 +87,7 @@ What additional recovery cases must be demonstrated before expanding preview cla
 | Date | Change | Basis |
 | --- | --- | --- |
 | 2026-10-20 | Name MR1–6 without changing transport, authority or release gates. | Product-owner approval to align existing connection/distribution requirements with shared contracts and evidence. |
+
+2026-11-10: MR1/MR3 extended for user-requested simultaneous registrations,
+per-service controls and safe migration of the existing credential account.
+This is client-owned behavior using unchanged shared CS1/4/5 and DC6 semantics.

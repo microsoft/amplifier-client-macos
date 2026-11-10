@@ -1,6 +1,9 @@
 #if os(macOS)
 import AppKit
 import ServiceManagement
+#if !NATIVE_CHECK
+import ClientCore
+#endif
 
 enum ConnectionAction { case pause, resume, forget }
 
@@ -10,6 +13,17 @@ enum ConnectionAction { case pause, resume, forget }
     private let loginDetail = NSTextField(wrappingLabelWithString: "")
     private let loginSettings = NSButton(title: "Review in System Settings…", target: nil, action: nil)
     private let defaults: UserDefaults
+    private let servicePicker = NSPopUpButton()
+    private let addServiceButton = NSButton(title: "Add…", target: nil, action: nil)
+    private let serviceName = NSTextField(string: "")
+    private let renameButton = NSButton(title: "Rename", target: nil, action: nil)
+    private var services: [RegisteredService] = []
+    private var statuses: [String: String] = [:]
+    private var displayedPreferredID: String?
+    private var editingID: String?
+    private var addingService = false
+    private let selectService: ((String) throws -> Void)?
+    private let renameService: ((String, String) throws -> Void)?
     private let address = NSTextField(string: "")
     private let token = NSSecureTextField(string: "")
     private let connectionState = NSTextField(wrappingLabelWithString: "")
@@ -29,14 +43,15 @@ enum ConnectionAction { case pause, resume, forget }
     private var manualControls: [NSView] = []
     private let manageDevices: ((String) throws -> Void)?
     private let pair: ((String, @escaping (String) -> Void) async throws -> String)?
-    private let connect: (String, String) throws -> Void
-    private let connectionAction: ((ConnectionAction) throws -> Void)?
+    private let connect: (String, String, String) throws -> Void
+    private let connectionAction: ((ConnectionAction, String) throws -> Void)?
     private let pauseButton = NSButton(title: "Disconnect", target: nil, action: nil)
     private let forgetButton = NSButton(title: "Forget…", target: nil, action: nil)
 
     init(defaults: UserDefaults, recoveryPath: String?, artwork: @escaping (String, String, String) -> NSImage?,
-         preferenceChanged: @escaping (String) -> Void, connectionAction: ((ConnectionAction) throws -> Void)? = nil, manageDevices: ((String) throws -> Void)? = nil, pair: ((String, @escaping (String) -> Void) async throws -> String)? = nil, connect: @escaping (String, String) throws -> Void) {
+         preferenceChanged: @escaping (String) -> Void, connectionAction: ((ConnectionAction, String) throws -> Void)? = nil, selectService: ((String) throws -> Void)? = nil, renameService: ((String, String) throws -> Void)? = nil, manageDevices: ((String) throws -> Void)? = nil, pair: ((String, @escaping (String) -> Void) async throws -> String)? = nil, connect: @escaping (String, String, String) throws -> Void) {
         self.defaults = defaults; self.artwork = artwork
+        self.selectService = selectService; self.renameService = renameService
         self.preferenceChanged = preferenceChanged; self.connect = connect; self.connectionAction = connectionAction; self.pair = pair; self.manageDevices = manageDevices
         let window = EditingWindow(contentRect: NSRect(x: 0, y: 0, width: 540, height: 508),
             styleMask: [.titled, .closable], backing: .buffered, defer: false)
@@ -152,19 +167,28 @@ enum ConnectionAction { case pause, resume, forget }
         refreshLoginItem()
 
         let connection = page("connection")
-        connection.addSubview(label("Your Amplifier", y: 436))
-        connection.addSubview(label("Connect to the Amplifier where your chats live.", y: 398, secondary: true))
-        group(y: 160, height: 222, in: connection)
-        connection.addSubview(label("Amplifier address", x: 16, y: 338, width: 460, secondary: true))
-        address.stringValue = defaults.string(forKey: "endpoint") ?? ""
-        address.frame = NSRect(x: 16, y: 312, width: 460, height: 26); address.setAccessibilityLabel("Amplifier address")
+        connection.addSubview(label("Your Amplifier services", y: 436))
+        connection.addSubview(label("See activity from all your services. Select one to manage it or make it your default for new chats.", y: 398, secondary: true))
+        servicePicker.frame = NSRect(x: 0, y: 362, width: 390, height: 28)
+        servicePicker.target = self; servicePicker.action = #selector(chooseService)
+        servicePicker.setAccessibilityLabel("Registered service")
+        connection.addSubview(servicePicker)
+        addServiceButton.frame = NSRect(x: 400, y: 362, width: 92, height: 28)
+        addServiceButton.bezelStyle = .rounded; addServiceButton.target = self; addServiceButton.action = #selector(addService)
+        connection.addSubview(addServiceButton)
+        serviceName.frame = NSRect(x: 0, y: 326, width: 390, height: 26)
+        serviceName.placeholderString = "Service name (optional)"; serviceName.bezelStyle = .roundedBezel
+        serviceName.setAccessibilityLabel("Service name"); connection.addSubview(serviceName)
+        renameButton.frame = NSRect(x: 400, y: 324, width: 92, height: 28)
+        renameButton.bezelStyle = .rounded; renameButton.target = self; renameButton.action = #selector(rename)
+        connection.addSubview(renameButton)
+        address.frame = NSRect(x: 0, y: 288, width: 492, height: 26); address.setAccessibilityLabel("Amplifier address")
         address.placeholderString = "https://your-amplifier-host"
-        address.bezelStyle = .roundedBezel
-        connection.addSubview(address)
-        pairingButton.frame = NSRect(x: 16, y: 264, width: 210, height: 32)
+        address.bezelStyle = .roundedBezel; connection.addSubview(address)
+        pairingButton.frame = NSRect(x: 0, y: 244, width: 210, height: 32)
         pairingButton.bezelStyle = .rounded; pairingButton.target = self; pairingButton.action = #selector(beginPairing)
         connection.addSubview(pairingButton)
-        connection.addSubview(label("Approve this Mac in your browser. No token to copy.", x: 16, y: 214, width: 460, secondary: true))
+        connection.addSubview(label("Approve this Mac in that service’s browser. Other connections stay active.", y: 202, secondary: true))
         manualButton.frame = NSRect(x: 16, y: 174, width: 210, height: 28)
         manualButton.isBordered = false; manualButton.alignment = .left; manualButton.contentTintColor = .linkColor
         manualButton.target = self; manualButton.action = #selector(toggleManual)
@@ -196,9 +220,59 @@ enum ConnectionAction { case pause, resume, forget }
         if defaults.string(forKey: "endpoint") == nil || recoveryPath != nil { showConnection() }
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-    func updateConnection(connected: Bool, message: String) {
+    func updateServices(_ records: [RegisteredService], preferredID: String?, statuses: [String: String], catalogError: String? = nil) {
+        if let catalogError {
+            result.stringValue = catalogError; result.textColor = .systemRed
+            [servicePicker, addServiceButton, pairingButton, manualButton, renameButton, pauseButton, forgetButton].forEach { $0.isEnabled = false }
+            manualControls.forEach { ($0 as? NSControl)?.isEnabled = false }
+            return
+        }
+        let changed = records != services || preferredID != displayedPreferredID
+        services = records; self.statuses = statuses; displayedPreferredID = preferredID
+        if changed {
+            servicePicker.removeAllItems()
+            for record in records {
+                let duplicate = records.filter { $0.displayName == record.displayName }.count > 1
+                let title = record.displayName + (duplicate ? " (" + record.address + ")" : "")
+                servicePicker.addItem(withTitle: title + (record.id == preferredID ? " · Default" : ""))
+            }
+        }
+        if let editingID, let index = records.firstIndex(where: { $0.id == editingID }) {
+            if changed { servicePicker.selectItem(at: index) }
+        } else if !addingService {
+            selectRecord(records.first { $0.id == preferredID } ?? records.first)
+        }
         refreshConnectionActions()
-        connectionState.stringValue = connected ? "Connected" : message; connectionState.toolTip = connected ? nil : message
+    }
+    private var editedService: RegisteredService? { services.first { $0.id == editingID } }
+    private func selectRecord(_ record: RegisteredService?) {
+        editingID = record?.id; addingService = record == nil
+        address.stringValue = record?.address ?? ""; serviceName.stringValue = record?.name ?? ""; token.stringValue = ""
+        if let index = services.firstIndex(where: { $0.id == record?.id }) { servicePicker.selectItem(at: index) }
+        else { servicePicker.select(nil) }
+        refreshConnectionActions()
+    }
+    @objc private func chooseService() {
+        guard services.indices.contains(servicePicker.indexOfSelectedItem), pairingTask == nil else { return }
+        let record = services[servicePicker.indexOfSelectedItem]
+        selectRecord(record)
+        do { try selectService?(record.id); result.stringValue = "" }
+        catch { result.textColor = .systemRed; result.stringValue = error.localizedDescription }
+    }
+    @objc private func addService() {
+        guard pairingTask == nil else { return }
+        selectRecord(nil); result.stringValue = "Enter the address of another Amplifier service."
+        result.textColor = .secondaryLabelColor; window?.makeFirstResponder(address)
+    }
+    @objc private func rename() {
+        guard let editingID else { return }
+        do { try renameService?(editingID, serviceName.stringValue); result.stringValue = "" }
+        catch { result.textColor = .systemRed; result.stringValue = error.localizedDescription }
+    }
+    private func didRegister(_ target: String) {
+        // The owner synchronously refreshes the catalog after saving a registration.
+        var catalog = ServiceRegistry(); services.forEach { catalog.replace($0) }
+        selectRecord(catalog.service(address: target) ?? services.first { $0.id == editingID })
     }
     override func showWindow(_ sender: Any?) {
         refreshLoginItem()
@@ -273,27 +347,35 @@ enum ConnectionAction { case pause, resume, forget }
         }
     }
     private func refreshConnectionActions() {
-        let available = connectionAction != nil && defaults.string(forKey: "endpoint") != nil && pairingTask == nil
-        pauseButton.title = defaults.bool(forKey: "connectionPaused") ? "Resume" : "Disconnect"
+        let busy = pairingTask != nil
+        let record = editedService
+        let available = connectionAction != nil && record != nil && !busy
+        pauseButton.title = record?.paused == true ? "Resume" : "Disconnect"
         pauseButton.isEnabled = available; forgetButton.isEnabled = available
+        address.isEnabled = !busy && record == nil
+        servicePicker.isEnabled = !busy && !services.isEmpty; addServiceButton.isEnabled = !busy
+        serviceName.isEnabled = !busy; renameButton.isEnabled = !busy && record != nil && renameService != nil
+        connectionState.stringValue = record.map { $0.paused ? "Disconnected" : statuses[$0.id] ?? "Not connected" } ?? "Not registered"
+        connectionState.toolTip = connectionState.stringValue
     }
     @objc private func toggleConnection() {
+        guard let record = editedService else { return }
         do {
-            try connectionAction?(defaults.bool(forKey: "connectionPaused") ? .resume : .pause)
+            try connectionAction?(record.paused ? .resume : .pause, record.id)
             result.stringValue = ""; refreshConnectionActions()
         } catch { result.textColor = .systemRed; result.stringValue = error.localizedDescription }
     }
     @objc private func forgetConnection() {
-        guard let window else { return }
-        let alert = NSAlert(); alert.messageText = "Forget this host on this Mac?"
-        alert.informativeText = "Host: \(defaults.string(forKey: "endpoint") ?? "Unknown")\n\nRemoves the saved credential and disconnects Amplifier. Saved messages are kept. To revoke the device on the host too, use Manage connected devices."
-        alert.addButton(withTitle: "Cancel"); alert.addButton(withTitle: "Forget credential")
+        guard let window, let record = editedService else { return }
+        let alert = NSAlert(); alert.messageText = "Forget this service on this Mac?"
+        alert.informativeText = "Service: \(record.address)\n\nRemoves only this registration and its saved credential. Other services and saved messages are kept. To revoke the device on the service too, use Manage connected devices."
+        alert.addButton(withTitle: "Cancel"); alert.addButton(withTitle: "Forget service")
         alert.beginSheetModal(for: window) { [weak self] response in
             guard response == .alertSecondButtonReturn, let self else { return }
             do {
-                try self.connectionAction?(.forget)
+                try self.connectionAction?(.forget, record.id)
                 self.token.stringValue = ""; self.result.textColor = .secondaryLabelColor
-                self.result.stringValue = "Credential removed. Connect in browser to approve this Mac again."
+                self.result.stringValue = "Service removed. Saved messages are kept."
                 self.refreshConnectionActions()
             } catch { self.result.textColor = .systemRed; self.result.stringValue = error.localizedDescription }
         }
@@ -310,7 +392,7 @@ enum ConnectionAction { case pause, resume, forget }
     @objc private func beginPairing() {
         if let task = pairingTask { task.cancel(); return }
         guard let pair else { return }
-        let target = address.stringValue
+        let target = address.stringValue, name = serviceName.stringValue
         address.isEnabled = false; manualButton.isEnabled = false
         manualControls.forEach { ($0 as? NSControl)?.isEnabled = false }
         pairingButton.title = "Cancel connection"
@@ -319,7 +401,7 @@ enum ConnectionAction { case pause, resume, forget }
         pairingTask = Task { @MainActor [weak self] in
             guard let self else { return }
             defer {
-                self.pairingTask = nil; self.address.isEnabled = true; self.manualButton.isEnabled = true
+                self.pairingTask = nil; self.manualButton.isEnabled = true
                 self.manualControls.forEach { ($0 as? NSControl)?.isEnabled = true }
                 self.pairingButton.title = "Connect in browser…"
                 self.refreshConnectionActions()
@@ -329,7 +411,8 @@ enum ConnectionAction { case pause, resume, forget }
                     self?.result.stringValue = "Match code \(code) in your browser, then allow the connection."
                 }
                 try Task.checkCancellation()
-                try self.connect(target, credential)
+                try self.connect(target, credential, name)
+                self.didRegister(target)
                 self.token.stringValue = ""; self.result.stringValue = "Connection approved. Amplifier is connecting…"
             } catch is CancellationError {
                 self.result.stringValue = "Connection cancelled. Your existing connection is unchanged."
@@ -337,10 +420,13 @@ enum ConnectionAction { case pause, resume, forget }
                 self.result.textColor = .systemRed; self.result.stringValue = error.localizedDescription
             }
         }
+        refreshConnectionActions()
     }
     @objc private func commit() {
         do {
-            try connect(address.stringValue, token.stringValue.trimmingCharacters(in: .whitespacesAndNewlines))
+            let target = address.stringValue
+            try connect(target, token.stringValue.trimmingCharacters(in: .whitespacesAndNewlines), serviceName.stringValue)
+            didRegister(target)
             token.stringValue = ""; result.textColor = .secondaryLabelColor; result.stringValue = "Connection saved. Amplifier is connecting…"
         } catch { result.textColor = .systemRed; result.stringValue = error.localizedDescription }
     }
