@@ -414,13 +414,20 @@ MainActor.assumeIsolated {
     multiComposer.target.selectItem(at: 1); multiComposer.editor.string = "Unsent draft"
     multiComposer.updateChoices([("a", "Office · New chat"), ("c", "Third · New chat")])
     precondition(multiComposer.target.titleOfSelectedItem == "Local · New chat" && multiComposer.editor.string == "Unsent draft")
+    var unavailableReplyHandled = false
     multiComposer.onSend = { id, _ in
+        unavailableReplyHandled = true
         precondition(id == "b", "A disappearing service must not silently retarget a draft")
         throw ComposerError.unavailable("Local is unavailable; draft kept")
     }
     multiComposer.textDidChange(Notification(name: NSText.didChangeNotification))
-    multiComposer.sendButton.performClick(nil); RunLoop.current.run(until: Date().addingTimeInterval(0.1))
-    precondition(multiComposer.editor.isEditable && multiComposer.editor.string == "Unsent draft" && multiComposer.sendButton.isEnabled)
+    multiComposer.sendButton.performClick(nil)
+    let replyDeadline = Date().addingTimeInterval(3)
+    while Date() < replyDeadline && (!unavailableReplyHandled || !multiComposer.sendButton.isEnabled) {
+        RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+    }
+    precondition(unavailableReplyHandled && multiComposer.editor.isEditable && multiComposer.editor.string == "Unsent draft" && multiComposer.sendButton.isEnabled,
+                 "Unavailable send must complete and preserve an editable draft, not depend on a fixed animation delay")
     print("PASS: independent service selection/pause/add/rename; polling preserves drafts; unavailable compose retains exact destination and text")
     let reopened = SettingsWindow(defaults: preferences, recoveryPath: nil, artwork: { _, _, _ in nil }, preferenceChanged: {_ in}, connect: {_,_,_ in})
     precondition(reopened.window!.title == "Connection", "Restore last settings pane")
