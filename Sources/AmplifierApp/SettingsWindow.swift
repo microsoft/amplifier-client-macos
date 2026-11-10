@@ -217,7 +217,7 @@ enum ConnectionAction { case pause, resume, forget }
         result.frame = NSRect(x: 0, y: 20, width: 492, height: 60); result.font = .systemFont(ofSize: 12); connection.addSubview(result)
         if let recoveryPath { result.stringValue = "Saved messages need recovery: \(recoveryPath)"; result.textColor = .systemRed }
         selectPage(at: min(2, max(0, defaults.integer(forKey: "settingsPane"))))
-        if defaults.string(forKey: "endpoint") == nil || recoveryPath != nil { showConnection() }
+        if recoveryPath != nil { showConnection() }
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     func updateServices(_ records: [RegisteredService], preferredID: String?, statuses: [String: String], catalogError: String? = nil) {
