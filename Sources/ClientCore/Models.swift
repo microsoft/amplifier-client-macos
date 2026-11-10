@@ -1,7 +1,7 @@
 import Foundation
 
 public enum CompanionError: Error, LocalizedError {
-    case invalidEndpoint, incompatibleHost, rejected(Int), uncertain, changedHost, observationPending
+    case invalidEndpoint, incompatibleHost, rejected(Int), uncertain, changedHost, changedService, observationPending
     public var errorDescription: String? {
         switch self {
         case .invalidEndpoint: return "Use an HTTPS host address, or HTTP on 127.0.0.1 or localhost. Omit paths, passwords, and query parameters."
@@ -9,6 +9,7 @@ public enum CompanionError: Error, LocalizedError {
         case .rejected(let code): return "The host refused this request (HTTP \(code)). Check your connection and token."
         case .observationPending: return "Amplifier is collecting activity. Tempo will reconnect shortly."
         case .uncertain: return "Delivery is unconfirmed. Your reply is saved. Check the chat before choosing Retry."
+        case .changedService: return "This address now identifies a different service. Use Connect in browser to approve it again; saved replies keep their original host."
         case .changedHost: return "This reply belongs to a different host. Reconnect to its original host."
         }
     }

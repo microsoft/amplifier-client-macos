@@ -19,6 +19,10 @@ workflow artifacts are for testing and are not qualified public installers.
 2. Open Amplifier. It appears in the menu bar; this preview has no Dock window.
 3. In **Settings → Connection**, enter your host's HTTPS address and choose
    **Connect in browser**. Sign in, compare the code and approve this Mac.
+   To register another service in builds with multi-service support, choose **Add…**
+   in the same pane and approve it independently. Give services names to distinguish
+   their chats and updates. **Disconnect**, **Resume** and **Forget** apply only to
+   the selected service; other registrations stay active.
 4. Enable notifications if you want them. Choose **Hide Tempo** if you prefer
    just the menu bar and notifications.
 

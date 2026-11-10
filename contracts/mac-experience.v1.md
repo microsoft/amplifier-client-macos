@@ -48,6 +48,9 @@ Amplifier.app
    resumes its animation without clearing unread/error indicators. Offline and
    Reduce Motion remain still; animation never marks an update read.
    Notice symbols retain the sidebar's work/unread/question/error meanings.
+   Combine current attention and work across registered services, with distinct
+   service labels and explicit unavailable-service status. Never count stale
+   observations as current or equate a partial outage with no remaining work.
    A local dismissal does not acknowledge host attention. Dismissed work stays
    hidden until its known execution state changes, not on each progress refresh.
    Broken: working alone increments attention or a palette disguises an error.
@@ -97,3 +100,7 @@ What browser handoff coverage is needed before adding another supported browser?
 | --- | --- | --- |
 | 2026-11-05 | Extend MP3/4 with stable scrolling, resize/fit semantics, local dismissal and sidebar-style status/action detail. | Product-owner request; shared attention authority remains unchanged. |
 | 2026-10-20 | Give existing Mac UX requirements MP1–5; delegate shared meanings to DC/CX/CS. | Product-owner approval of contract alignment; preserves the existing interaction guide and separates future Windows implementation. |
+
+2026-11-10: MP3 extended for combined visibility across explicitly registered
+services, service identification and truthful partial-unavailability reporting.
+Host attention authority and the work/attention distinction are unchanged.

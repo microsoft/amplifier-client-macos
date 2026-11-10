@@ -34,3 +34,20 @@ Forget the local credential, quit Amplifier and remove Amplifier.app. Preference
 and saved messages remain in `~/Library/Application Support/Amplifier for Mac` and
 the `com.microsoft.amplifier.macos` defaults domain. The application does not
 remove host or CLI data. Full local-data removal is not currently an in-app action.
+
+
+## Multiple services (development successor)
+
+Each registered service has a separate origin-bound Keychain credential. Settings
+stores only the address, optional local name, pause state, registration ID and
+observed durable host identity. The existing single connection migrates once
+without moving its credential. Adding a remote or loopback service requires its
+own browser approval (or explicit manual token); no credential is copied from a
+registered service. Use HTTPS except for supported loopback HTTP addresses.
+
+Service identity is part of every chat/reply destination. Current activity is
+combined locally, with source labels; no history, credentials or messages are
+replicated between services. An unavailable service is named in the menu while
+healthy ones continue. Forget removes only the selected registration/credential;
+saved uncertain messages remain tied to their original endpoint and host.
+This client-only behavior does not grant browser or desktop execution.

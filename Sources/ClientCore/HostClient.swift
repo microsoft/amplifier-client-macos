@@ -10,11 +10,28 @@ private final class NoRedirects: NSObject, URLSessionTaskDelegate {
                     completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
 }
 
+/// Cancellation can arrive before URLSession has created the task.
+private final class RequestCancellation {
+    private let lock = NSLock()
+    private var cancelled = false
+    private var task: URLSessionDataTask?
+    func attach(_ task: URLSessionDataTask) {
+        lock.lock(); self.task = task; let cancel = cancelled; lock.unlock()
+        if cancel { task.cancel() }
+    }
+    func cancel() {
+        lock.lock(); cancelled = true; let task = task; lock.unlock()
+        task?.cancel()
+    }
+}
+
 public final class HostClient {
     public let endpoint: Endpoint
     private let token: String
     private let clientID: String
     private let session: URLSession
+    private let transportLock = NSLock()
+    private var closed = false
     public init(endpoint: Endpoint, token: String, clientID: String,
                 configuration: URLSessionConfiguration = .ephemeral) {
         self.endpoint = endpoint; self.token = token
@@ -33,6 +50,38 @@ public final class HostClient {
         self.session = URLSession(configuration: config, delegate: NoRedirects(), delegateQueue: nil)
     }
     deinit { session.invalidateAndCancel() }
+    /// End this registration's transport, including bounded detail reads whose
+    /// callers may still be awaiting a result. A new connection uses a new client.
+    public func cancelRequests() {
+        transportLock.lock(); closed = true; transportLock.unlock()
+        // Keep the session valid until deinit: data(for:) on an invalidated
+        // session can raise an NSException rather than a catchable Swift error.
+        session.getAllTasks { tasks in tasks.forEach { $0.cancel() } }
+    }
+    private func startTask(_ request: URLRequest,
+                           completion: @escaping (Data?, URLResponse?, Error?) -> Void) -> URLSessionDataTask? {
+        transportLock.lock(); defer { transportLock.unlock() }
+        guard !closed else { return nil }
+        // Creation and resume share the close gate, so cancelRequests' task
+        // enumeration includes every admitted read and no later request starts.
+        let task = session.dataTask(with: request, completionHandler: completion)
+        task.resume(); return task
+    }
+    private func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        let cancellation = RequestCancellation()
+        return try await withTaskCancellationHandler(operation: {
+            try Task.checkCancellation()
+            return try await withCheckedThrowingContinuation { continuation in
+                let task = startTask(request) { data, response, error in
+                    if let error { continuation.resume(throwing: error) }
+                    else if let data, let response { continuation.resume(returning: (data, response)) }
+                    else { continuation.resume(throwing: CompanionError.uncertain) }
+                }
+                if let task { cancellation.attach(task) }
+                else { continuation.resume(throwing: URLError(.cancelled)) }
+            }
+        }, onCancel: { cancellation.cancel() })
+    }
     private func request(_ url: URL, body: [String: Any]? = nil) async throws -> Data {
         var request = URLRequest(url: url)
         request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
@@ -43,7 +92,7 @@ public final class HostClient {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
         }
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await data(for: request)
         guard let http = response as? HTTPURLResponse else { throw CompanionError.uncertain }
         guard (200..<300).contains(http.statusCode) else {
             if http.statusCode == 503,

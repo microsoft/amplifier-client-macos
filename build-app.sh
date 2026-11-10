@@ -10,7 +10,7 @@ swiftc Sources/AmplifierApp/LoginItemController.swift Checks/Login/main.swift -o
 "$tempo_check_dir/login-check"
 swiftc Sources/AmplifierApp/EditingWindow.swift Checks/main.swift -o "$tempo_check_dir/editing-check"
 "$tempo_check_dir/editing-check"
-swiftc -D NATIVE_CHECK Sources/ClientCore/NoticePresentation.swift Sources/ClientCore/Models.swift Sources/ClientCore/AvatarAnimation.swift Sources/AmplifierApp/SpriteView.swift Sources/AmplifierApp/LoginItemController.swift Sources/AmplifierApp/AvatarAppearance.swift Sources/AmplifierApp/TempoInteraction.swift Sources/AmplifierApp/SettingsWindow.swift Sources/AmplifierApp/TempoSurface.swift Sources/AmplifierApp/TempoBubbles.swift Sources/AmplifierApp/TempoComposer.swift Sources/AmplifierApp/EditingWindow.swift Checks/Surface/main.swift -o "$tempo_check_dir/surface-check"
+swiftc -D NATIVE_CHECK Sources/ClientCore/Services.swift Sources/ClientCore/NoticePresentation.swift Sources/ClientCore/Models.swift Sources/ClientCore/AvatarAnimation.swift Sources/AmplifierApp/SpriteView.swift Sources/AmplifierApp/LoginItemController.swift Sources/AmplifierApp/AvatarAppearance.swift Sources/AmplifierApp/TempoInteraction.swift Sources/AmplifierApp/SettingsWindow.swift Sources/AmplifierApp/TempoSurface.swift Sources/AmplifierApp/TempoBubbles.swift Sources/AmplifierApp/TempoComposer.swift Sources/AmplifierApp/EditingWindow.swift Checks/Surface/main.swift -o "$tempo_check_dir/surface-check"
 "$tempo_check_dir/surface-check"
 swiftc -D NATIVE_CHECK Sources/ClientCore/Models.swift Sources/ClientCore/AvatarAnimation.swift Sources/AmplifierApp/AvatarAppearance.swift Sources/AmplifierApp/SpriteView.swift Checks/Avatar/main.swift -o "$tempo_check_dir/avatar-check"
 "$tempo_check_dir/avatar-check"

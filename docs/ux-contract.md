@@ -186,3 +186,30 @@ sent or awaiting startup delivery; never silently retarget a pending message.
 The approved family and its state-specific light/motion behavior are specified in
 [Avatar family and motion](avatar-animation.md). Completion/error reactions are
 one-shot and do not restart on polling. Reduce Motion retains a still status pose.
+
+## Several Amplifier services
+
+Connection settings lists registrations and exposes Add, an optional name,
+browser approval, and per-service Disconnect/Resume/Forget. Adding starts a draft;
+refreshing connection status must not erase it. A registered address is read-only;
+use Add for a different origin. Rename changes its local label without reapproval.
+Selecting a saved service makes it the default for generic Open Amplifier and
+new composers; existing drafts and pending replies retain their destination.
+
+The menu lists every service with its own status. Your chats groups by service,
+and multi-service notice details and desktop notifications include the service
+name. Duplicate custom names include the address. Attention/work totals describe
+currently available services; a partial outage is explicitly labeled unavailable,
+not silently reported as a complete zero. Paused services are labeled disconnected.
+
+The composer offers a new-chat destination and chats for each connected service.
+The chosen destination stays attached to unfinished input even when that service
+goes offline. An unavailable destination keeps the draft editable and sends nothing;
+the user can reconnect or explicitly choose another destination. New-chat follow-ups
+remain on the original service. Registration and credential changes never migrate
+chats or copy credentials to another service.
+
+Per-service pause/forget and offline state do not stop other services' polling or
+retarget their messages. Forget removes that registration and credential locally;
+server-side revocation is separate. Old uncertain replies stay in Saved messages
+with their original destination and command identities.
