@@ -1,4 +1,24 @@
-# Amplifier for Mac 0.1.4
+# Amplifier for Mac 0.1.5
+
+Connect Amplifier for Mac to multiple Amplifier Unified services and see their
+chat activity together in Tempo.
+
+- Add and name services in Settings, choose a default, and pause, resume or forget
+  each connection independently. Each service requires its own browser approval.
+- Chat menus and activity cards identify their service. One unavailable service
+  does not interrupt the others.
+- Replies and saved drafts retain their original service and chat destination,
+  even when the default changes or a connection is unavailable.
+- Existing single-service connections and preferences migrate automatically;
+  credentials remain in Keychain.
+
+No server upgrade is required. Browser execution and PWA auto-hide are not added
+by this release. Core and native component checks cover connection isolation,
+request cancellation, destination capture and Settings interaction. Signed app,
+DMG and upgrade qualification precede publication; manual VoiceOver and physical
+Intel coverage remain separate.
+
+## Previous release: 0.1.4
 
 Tempo's activity cards show clearer action details and make better use of their space.
 
