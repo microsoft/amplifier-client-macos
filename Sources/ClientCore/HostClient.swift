@@ -33,6 +33,9 @@ public final class HostClient {
         self.session = URLSession(configuration: config, delegate: NoRedirects(), delegateQueue: nil)
     }
     deinit { session.invalidateAndCancel() }
+    /// End this registration's transport, including bounded detail reads whose
+    /// callers may still be awaiting a result. A new connection uses a new client.
+    public func cancelRequests() { session.invalidateAndCancel() }
     private func request(_ url: URL, body: [String: Any]? = nil) async throws -> Data {
         var request = URLRequest(url: url)
         request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")

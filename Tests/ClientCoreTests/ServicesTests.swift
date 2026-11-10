@@ -69,6 +69,21 @@ final class ServicesTests: XCTestCase {
         let item = try XCTUnwrap(snapshot.items.first)
         XCTAssertNotEqual(item.scoped(to: "service-a").id, item.scoped(to: "service-b").id)
     }
+    func testStoppedTransportCannotStartAnotherReadButOtherServiceStillWorks() async throws {
+        ServicesURLProtocol.handler = { request in
+            XCTAssertEqual(request.url?.host, "b.example", "Stopped credential must not issue further requests")
+            return (200, Data("{\"protocolVersion\":1}".utf8))
+        }
+        defer { ServicesURLProtocol.handler = nil }
+        func client(_ address: String) throws -> HostClient {
+            let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [ServicesURLProtocol.self]
+            return HostClient(endpoint: try Endpoint(address), token: "fixture", clientID: "fixture", configuration: config)
+        }
+        let stopped = try client("https://a.example"), healthy = try client("https://b.example")
+        stopped.cancelRequests()
+        do { try await stopped.attach(); XCTFail("Stopped transport was reused") } catch { }
+        try await healthy.attach()
+    }
     @MainActor func testFailingServiceDoesNotBlockHealthyServiceAndPauseKeepsOtherConnection() async throws {
         let a = ServiceConnection(try RegisteredService(address: "https://a.example"))
         let b = ServiceConnection(try RegisteredService(address: "https://b.example"))

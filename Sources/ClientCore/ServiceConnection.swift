@@ -19,7 +19,7 @@ import Foundation
     public init(_ registration: RegisteredService) { self.registration = registration }
     public func owns(_ client: HostClient) -> Bool { self.client === client }
     public func stop() {
-        generation = UUID(); poll?.cancel(); poll = nil; client = nil
+        generation = UUID(); poll?.cancel(); poll = nil; client?.cancelRequests(); client = nil
         connected = false; connecting = false
         // Preserve last observations while unavailable, but never count them as current.
         detailRequests = []; previews = [:]; previewAttempts = []; workLabels = [:]

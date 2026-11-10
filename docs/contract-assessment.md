@@ -135,11 +135,11 @@ current visibility. Shared CS1/2/4/5 and DC1/4/5/6 remain unchanged; see the cur
 [reviewed contract source](compatibility.md#multiple-service-review-2026-11-10).
 No server deployment or additional device authority is part of this change.
 
-Component evidence: 48 core checks, including seven multi-service cases for legacy
+Component evidence: 49 core checks, including eight multi-service cases for legacy
 migration/empty catalog recovery, origin aliases and independent ports, corrupt
 catalog preservation, captured destination isolation, colliding chat/notification
 IDs, independent success/failure and pause, canceled credential resolution and
-host replacement. Native AppKit checks cover service selection/default,
+host replacement, and rejection of reads after a transport is stopped. Native AppKit checks cover service selection/default,
 per-service pause, Add and Rename, polling while a draft is being edited, captured
 composer destinations and retained editable input when a service is unavailable.
 The existing notice layout/scroll/dismiss/resize checks also pass. Universal
