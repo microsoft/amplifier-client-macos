@@ -1,4 +1,18 @@
-# Amplifier for Mac 0.1.6
+# Amplifier for Mac 0.1.7
+
+Tempo's scrolling notice list softly fades clipped cards at the top and bottom
+instead of ending with a hard visual cut. Only edges with more content fade;
+complete first/last cards and lists that fit remain fully visible. The header
+stays crisp, and transparent gaps and faded edges continue to accept scrolling.
+
+This is native presentation polish. Service connections, ordering/grouping,
+attention, saved list height, avatar settings and replies are preserved. No
+server update is required. Native scroll/end/fit-all checks and synthetic glass
+window capture qualify the changed surface; signed app/DMG and upgrade checks
+precede publication. Manual VoiceOver and the full display matrix remain
+separate coverage.
+
+## Previous release: 0.1.6
 
 Tempo's expanded activity list stays directly above the avatar when resized or
 moved toward the top of a display. It reduces the scroll viewport instead of

@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import QuartzCore
 #if !NATIVE_CHECK
 import ClientCore
 #endif
@@ -330,8 +331,45 @@ import ClientCore
     }
 }
 @MainActor final class NoticeScrollView: NSScrollView {
+    private let edgeMask = CAGradientLayer()
     override var isOpaque: Bool { false }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override func reflectScrolledClipView(_ clipView: NSClipView) {
+        super.reflectScrolledClipView(clipView)
+        updateEdgeFade()
+    }
+    override func layout() {
+        super.layout()
+        updateEdgeFade()
+    }
+    private func updateEdgeFade() {
+        guard let document = documentView else { return }
+        let visible = documentVisibleRect
+        let lower = max(0, visible.minY - document.bounds.minY)
+        let upper = max(0, document.bounds.maxY - visible.maxY)
+        document.wantsLayer = true
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        guard visible.height > 0, lower > 0.5 || upper > 0.5 else {
+            document.layer?.mask = nil
+            return
+        }
+        // Mask only the cards/headings, leaving the clip view's transparent
+        // wheel-event coverage intact. Never paint a background over the desktop.
+        let depth = min(CGFloat(18), visible.height / 3)
+        let bottom = lower > 0.5 ? min(depth, lower) : 0
+        let top = upper > 0.5 ? min(depth, upper) : 0
+        edgeMask.frame = visible
+        edgeMask.startPoint = CGPoint(x: 0.5, y: 0)
+        edgeMask.endPoint = CGPoint(x: 0.5, y: 1)
+        edgeMask.colors = [NSColor.black.withAlphaComponent(bottom > 0 ? 0 : 1).cgColor,
+                           NSColor.black.cgColor, NSColor.black.cgColor,
+                           NSColor.black.withAlphaComponent(top > 0 ? 0 : 1).cgColor]
+        edgeMask.locations = [0, NSNumber(value: Double(bottom / visible.height)),
+                              NSNumber(value: Double(1 - top / visible.height)), 1]
+        document.layer?.mask = edgeMask
+    }
 }
 @MainActor private final class NoticeStackView: NSStackView {
     override func scrollWheel(with event: NSEvent) { enclosingScrollView?.scrollWheel(with: event) }

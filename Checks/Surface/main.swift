@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 setbuf(stdout, nil)
 
 MainActor.assumeIsolated {
@@ -142,11 +143,46 @@ MainActor.assumeIsolated {
     let collapseList = header.content.subviews.compactMap { $0 as? NoticeButton }.first!
     precondition(collapseList.acceptsFirstMouse(for: nil))
     precondition(collapseList.title.hasPrefix("11 updates"), "Ongoing work must not increase attention counters")
+    // Fades belong to the scrolling content, never its event-catching clip view
+    // or fixed header. At a list end the complete edge must remain opaque.
+    @MainActor func checkFade(_ y: CGFloat, lower: CGFloat, upper: CGFloat) {
+        list.contentView.scroll(to: NSPoint(x: 0, y: y))
+        list.reflectScrolledClipView(list.contentView)
+        let mask = document.layer!.mask as! CAGradientLayer
+        let colors = mask.colors as! [CGColor]
+        precondition(colors.first!.alpha == lower && colors.last!.alpha == upper)
+        precondition(mask.frame == list.documentVisibleRect, "Fade stays at the viewport as the document scrolls")
+        precondition(list.contentView.layer?.mask == nil && header.layer?.mask == nil)
+        precondition(mask.animationKeys()?.isEmpty ?? true, "Scrolling must not animate or lag the fade")
+    }
+    checkFade(0, lower: 1, upper: 0)
+    checkFade(200, lower: 0, upper: 0)
+    checkFade(document.bounds.height - list.contentSize.height, lower: 0, upper: 1)
+    if let directory = ProcessInfo.processInfo.environment["AMPLIFIER_FADE_CAPTURE_DIR"], let screen = NSScreen.main {
+        window.setFrameOrigin(NSPoint(x: screen.visibleFrame.midX - 360, y: screen.visibleFrame.midY - 200))
+        bubbles.position(window); bubbles.window.orderFrontRegardless()
+        for (name, y) in [("top", document.bounds.height - list.contentSize.height), ("middle", CGFloat(200)), ("bottom", CGFloat(0))] {
+            list.contentView.scroll(to: NSPoint(x: 0, y: y)); list.reflectScrolledClipView(list.contentView)
+            app.updateWindows(); bubbles.window.displayIfNeeded(); CATransaction.flush()
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+            try! String(bubbles.window.windowNumber).write(toFile: directory + "/" + name + "-window", atomically: true, encoding: .utf8)
+            let deadline = Date().addingTimeInterval(30)
+            while !FileManager.default.fileExists(atPath: directory + "/" + name + ".png") && Date() < deadline {
+                RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+            }
+            precondition(FileManager.default.fileExists(atPath: directory + "/" + name + ".png"), "Native fade capture missing")
+        }
+        window.setFrameOrigin(NSPoint(x: -10000, y: -10000)); bubbles.position(window)
+    }
+    checkFade(document.bounds.height - list.contentSize.height, lower: 0, upper: 1)
+    print("PASS: conditional top/middle/bottom fades track scrolling without masking the header or wheel coverage")
     // Optional real WindowServer routing check: a wheel over a transparent gap
     // must reach this panel and scroll it just like a wheel over a card.
     if CommandLine.arguments.contains("--wheel-check"), CGPreflightPostEventAccess(), let screen = NSScreen.main {
         let previousMouse = NSEvent.mouseLocation
         window.setFrameOrigin(NSPoint(x: screen.visibleFrame.midX - 360, y: screen.visibleFrame.midY - 200))
+        // Start inside the range so either wheel direction can actually move.
+        list.contentView.scroll(to: NSPoint(x: 0, y: 200)); list.reflectScrolledClipView(list.contentView)
         bubbles.position(window); bubbles.window.orderFrontRegardless(); app.updateWindows(); bubbles.window.displayIfNeeded(); CATransaction.flush()
         RunLoop.current.run(until: Date().addingTimeInterval(0.15))
         let visible = document.visibleRect
@@ -171,7 +207,9 @@ MainActor.assumeIsolated {
             precondition(color.alphaComponent <= 0.01, "The gap must stay visually transparent, never an opaque scroll backing")
         }
 
-        for local in [point, cardPoint] {
+        for target in ["gap", "card", "faded edge"] {
+            let local = target == "gap" ? point : target == "card" ? cardPoint :
+                NSPoint(x: 160, y: list.documentVisibleRect.minY + 1)
             let before = list.contentView.bounds.origin
             let onScreen = bubbles.window.convertPoint(toScreen: document.convert(local, to: nil))
             let quartz = NSPoint(x: onScreen.x, y: screen.frame.maxY - onScreen.y)
@@ -185,12 +223,12 @@ MainActor.assumeIsolated {
             precondition(delivered.window === bubbles.window, "WindowServer must route gaps to the notice panel")
             app.sendEvent(delivered)
             RunLoop.current.run(until: Date().addingTimeInterval(0.1))
-            precondition(list.contentView.bounds.origin != before, "Both gap and card wheel events must scroll the list")
+            precondition(list.contentView.bounds.origin != before, "Wheel events over \(target) must scroll the list")
         }
         CGEvent(mouseEventSource: nil, mouseType: .mouseMoved,
             mouseCursorPosition: NSPoint(x: previousMouse.x, y: screen.frame.maxY - previousMouse.y), mouseButton: .left)?.post(tap: .cghidEventTap)
         window.setFrameOrigin(NSPoint(x: -10000, y: -10000))
-        print("PASS: real WindowServer wheel routing over gaps and cards")
+        print("PASS: real WindowServer wheel routing over gaps, cards and faded edges")
     }
     // Detail refresh must preserve the reading location, not return to row one.
     list.contentView.scroll(to: NSPoint(x: 0, y: 200)); list.reflectScrolledClipView(list.contentView)
@@ -216,6 +254,8 @@ MainActor.assumeIsolated {
     bubbles.update(Array(updated.prefix(2)), anchor: window, keepExisting: true, attentionCount: 1)
     bubbles.resizeList(to: 2000)
     precondition(bubbles.fitsContents && bubbles.listHeight == 116, "Cannot drag past all contents")
+    let fitted = bubbles.window.contentView!.subviews.compactMap { $0 as? NoticeScrollView }.first!
+    precondition(fitted.documentView?.layer?.mask == nil, "Fit-all contents must be completely unfaded")
     bubbles.update(updated, anchor: window, keepExisting: true, attentionCount: 11)
     precondition(bubbles.listHeight == 700, "Fit-all grows until the screen bound")
     bubbles.update(Array(updated.prefix(2)), anchor: window, keepExisting: true)

@@ -168,3 +168,13 @@ No host API, authority, pairing or shared contract changes are needed.
 Native edge/resize/grouping and core ordering checks are required for this
 change; signed installation, physical VoiceOver and a full display matrix remain
 separate qualification rather than implied by source tests.
+
+## Notice edge fade (2026-11-10)
+
+User-requested MP4 polish replaces the visual hard cut at overflowing viewport
+edges with a short content alpha mask. It changes no ordering, attention, routing,
+viewport geometry or host behavior. Native checks cover list ends, middle scroll,
+fit-all removal, mask placement and independent event coverage/header. Physical
+synthetic-window capture checks the actual glass compositing separately; this is
+not a new full display/VoiceOver matrix. Signed-candidate release checks remain
+separate from source/component and visual qualification.
