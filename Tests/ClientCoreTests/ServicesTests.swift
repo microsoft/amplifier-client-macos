@@ -84,6 +84,27 @@ final class ServicesTests: XCTestCase {
         do { try await stopped.attach(); XCTFail("Stopped transport was reused") } catch { }
         try await healthy.attach()
     }
+    func testInFlightReadsCancelOnTaskCancellationAndServiceStop() async throws {
+        let started = expectation(description: "two reads started"); started.expectedFulfillmentCount = 2
+        let finished = expectation(description: "both reads canceled"); finished.expectedFulfillmentCount = 2
+        HeldServiceURLProtocol.onStart = { started.fulfill() }
+        defer { HeldServiceURLProtocol.onStart = nil }
+        func client() throws -> HostClient {
+            let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [HeldServiceURLProtocol.self]
+            return HostClient(endpoint: try Endpoint("https://example.com"), token: "fixture", clientID: "fixture", configuration: config)
+        }
+        let first = try client(), second = try client()
+        func read(_ client: HostClient) async {
+            do { try await client.attach(); XCTFail("Canceled read completed") }
+            catch { XCTAssertEqual((error as NSError).code, NSURLErrorCancelled) }
+            finished.fulfill()
+        }
+        let task = Task { await read(first) }, other = Task { await read(second) }
+        defer { task.cancel(); other.cancel(); first.cancelRequests(); second.cancelRequests() }
+        await fulfillment(of: [started], timeout: 3)
+        task.cancel(); second.cancelRequests()
+        await fulfillment(of: [finished], timeout: 3)
+    }
     @MainActor func testFailingServiceDoesNotBlockHealthyServiceAndPauseKeepsOtherConnection() async throws {
         let a = ServiceConnection(try RegisteredService(address: "https://a.example"))
         let b = ServiceConnection(try RegisteredService(address: "https://b.example"))
@@ -154,5 +175,13 @@ private final class ServicesURLProtocol: URLProtocol {
             client?.urlProtocol(self, didLoad: data); client?.urlProtocolDidFinishLoading(self)
         } catch { client?.urlProtocol(self, didFailWithError: error) }
     }
+    override func stopLoading() {}
+}
+
+private final class HeldServiceURLProtocol: URLProtocol {
+    static var onStart: (() -> Void)?
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() { Self.onStart?() }
     override func stopLoading() {}
 }
