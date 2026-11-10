@@ -229,3 +229,12 @@ Per-service pause/forget and offline state do not stop other services' polling o
 retarget their messages. Forget removes that registration and credential locally;
 server-side revocation is separate. Old uncertain replies stay in Saved messages
 with their original destination and command identities.
+
+### Notice viewport edges
+
+Clipped notice content fades to transparency over a short edge region, revealing
+the desktop underneath rather than painting a colored overlay. Fade only at an
+edge with more content beyond it; a complete first/last card and a list that fits
+remain fully visible. The fixed header stays crisp. The fade follows scrolling
+and resizing without an independent animation, and the transparent clip view
+continues to catch wheel events across gaps and faded edges.
