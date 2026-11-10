@@ -4,7 +4,7 @@ import ServiceManagement
 
 enum ConnectionAction { case pause, resume, forget }
 
-@MainActor final class SettingsWindow: NSWindowController, NSToolbarDelegate {
+@MainActor final class SettingsWindow: NSWindowController, NSToolbarDelegate, NSWindowDelegate {
     private let loginItem = LoginItemController()
     private let loginSwitch = NSSwitch()
     private let loginDetail = NSTextField(wrappingLabelWithString: "")
@@ -33,16 +33,21 @@ enum ConnectionAction { case pause, resume, forget }
     private let connectionAction: ((ConnectionAction) throws -> Void)?
     private let pauseButton = NSButton(title: "Disconnect", target: nil, action: nil)
     private let forgetButton = NSButton(title: "Forget…", target: nil, action: nil)
+    private let browserSetup: ((String) async throws -> Void)?
+    private let browserButton = NSButton(title: "Browser access…", target: nil, action: nil)
+    private var browserTask: Task<Void, Never>?
 
     init(defaults: UserDefaults, recoveryPath: String?, artwork: @escaping (String, String, String) -> NSImage?,
-         preferenceChanged: @escaping (String) -> Void, connectionAction: ((ConnectionAction) throws -> Void)? = nil, manageDevices: ((String) throws -> Void)? = nil, pair: ((String, @escaping (String) -> Void) async throws -> String)? = nil, connect: @escaping (String, String) throws -> Void) {
+         preferenceChanged: @escaping (String) -> Void, connectionAction: ((ConnectionAction) throws -> Void)? = nil, manageDevices: ((String) throws -> Void)? = nil, browserSetup: ((String) async throws -> Void)? = nil, pair: ((String, @escaping (String) -> Void) async throws -> String)? = nil, connect: @escaping (String, String) throws -> Void) {
         self.defaults = defaults; self.artwork = artwork
         self.preferenceChanged = preferenceChanged; self.connect = connect; self.connectionAction = connectionAction; self.pair = pair; self.manageDevices = manageDevices
+        self.browserSetup = browserSetup
         let window = EditingWindow(contentRect: NSRect(x: 0, y: 0, width: 540, height: 508),
             styleMask: [.titled, .closable], backing: .buffered, defer: false)
         window.title = "Amplifier Settings"; window.titlebarAppearsTransparent = true
         window.center(); window.isReleasedWhenClosed = false; window.level = .normal
         super.init(window: window)
+        window.delegate = self
         let root = window.contentView!
         let toolbar = NSToolbar(identifier: "AmplifierSettings")
         toolbar.delegate = self; toolbar.allowsUserCustomization = false
@@ -164,7 +169,13 @@ enum ConnectionAction { case pause, resume, forget }
         pairingButton.frame = NSRect(x: 16, y: 264, width: 210, height: 32)
         pairingButton.bezelStyle = .rounded; pairingButton.target = self; pairingButton.action = #selector(beginPairing)
         connection.addSubview(pairingButton)
-        connection.addSubview(label("Approve this Mac in your browser. No token to copy.", x: 16, y: 214, width: 460, secondary: true))
+        browserButton.frame = NSRect(x: 246, y: 264, width: 230, height: 32)
+        browserButton.bezelStyle = .rounded; browserButton.target = self; browserButton.action = #selector(openBrowserSetup)
+        browserButton.isEnabled = browserSetup != nil
+        browserButton.toolTip = "Open separate browser setup for this address. Use Edge or Chrome with the Amplifier extension."
+        browserButton.setAccessibilityHelp(browserButton.toolTip)
+        connection.addSubview(browserButton)
+        connection.addSubview(label("Approve chat access in your browser. Browser access needs separate approval.", x: 16, y: 214, width: 460, secondary: true))
         manualButton.frame = NSRect(x: 16, y: 174, width: 210, height: 28)
         manualButton.isBordered = false; manualButton.alignment = .left; manualButton.contentTintColor = .linkColor
         manualButton.target = self; manualButton.action = #selector(toggleManual)
@@ -302,6 +313,29 @@ enum ConnectionAction { case pause, resume, forget }
         do { try manageDevices?(address.stringValue) }
         catch { result.textColor = .systemRed; result.stringValue = error.localizedDescription }
     }
+    @objc private func openBrowserSetup() {
+        guard let browserSetup, browserTask == nil, pairingTask == nil else { return }
+        let target = address.stringValue
+        browserButton.isEnabled = false; pairingButton.isEnabled = false
+        result.textColor = .secondaryLabelColor; result.stringValue = "Checking browser setup…"
+        browserTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer {
+                self.browserTask = nil; self.browserButton.isEnabled = true
+                self.pairingButton.isEnabled = true
+            }
+            do {
+                try await browserSetup(target)
+                try Task.checkCancellation()
+                self.result.stringValue = "Continue in Edge or Chrome with the Amplifier extension. Select a tab or stop access in the extension. Quitting this app does not stop browser access."
+            } catch {
+                if !Task.isCancelled {
+                    self.result.textColor = .systemRed; self.result.stringValue = error.localizedDescription
+                }
+            }
+        }
+    }
+    func windowWillClose(_ notification: Notification) { browserTask?.cancel() }
     @objc private func toggleManual() {
         let show = token.isHidden
         manualControls.forEach { $0.isHidden = !show }
@@ -312,6 +346,7 @@ enum ConnectionAction { case pause, resume, forget }
         guard let pair else { return }
         let target = address.stringValue
         address.isEnabled = false; manualButton.isEnabled = false
+        browserButton.isEnabled = false
         manualControls.forEach { ($0 as? NSControl)?.isEnabled = false }
         pairingButton.title = "Cancel connection"
         pauseButton.isEnabled = false; forgetButton.isEnabled = false
@@ -322,6 +357,7 @@ enum ConnectionAction { case pause, resume, forget }
                 self.pairingTask = nil; self.address.isEnabled = true; self.manualButton.isEnabled = true
                 self.manualControls.forEach { ($0 as? NSControl)?.isEnabled = true }
                 self.pairingButton.title = "Connect in browser…"
+                self.browserButton.isEnabled = self.browserSetup != nil
                 self.refreshConnectionActions()
             }
             do {
