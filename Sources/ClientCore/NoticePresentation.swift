@@ -1,5 +1,28 @@
 import Foundation
 
+public enum NoticePriority: Int {
+    case input = 0, unread, working
+    public static func attention(_ status: NoticeStatus) -> Self {
+        [.error, .blocked, .question].contains(status) ? .input : .unread
+    }
+}
+
+/// Stable ties preserve each host's order; grouping changes only the outer key.
+public enum NoticeOrdering {
+    public static func sorted<Row>(_ rows: [Row], grouped: Bool,
+                                   service: (Row) -> String, priority: (Row) -> NoticePriority) -> [Row] {
+        var groups: [String: Int] = [:]
+        for row in rows where groups[service(row)] == nil { groups[service(row)] = groups.count }
+        return rows.enumerated().sorted { a, b in
+            if grouped, groups[service(a.element)] != groups[service(b.element)] {
+                return groups[service(a.element)]! < groups[service(b.element)]!
+            }
+            if priority(a.element) != priority(b.element) { return priority(a.element).rawValue < priority(b.element).rawValue }
+            return a.offset < b.offset
+        }.map(\.element)
+    }
+}
+
 public struct NoticeListSize {
     public var maximum: Double
     public var fitsContents: Bool

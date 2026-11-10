@@ -31,8 +31,9 @@ enum ConnectionAction { case pause, resume, forget }
     private let pages = NSTabView()
     private var swatches: [NSButton] = []
     private let finish = NSSegmentedControl(labels: ["Clear", "Dark"], trackingMode: .selectOne, target: nil, action: nil)
-    private let paneNames = ["Appearance", "Notifications", "Connection"]
-    private let paneIcons = ["paintpalette", "bell", "network"]
+    private let paneNames = ["Appearance", "Notifications", "Connection", "Tempo"]
+    private let paneIcons = ["paintpalette", "bell", "network", "list.bullet"]
+    private var serviceHeadingsToggle: NSSwitch?
     private var previewCache: [String: NSImage] = [:]
     private var avatars: [NSButton] = []
     private let artwork: (String, String, String) -> NSImage?
@@ -90,7 +91,7 @@ enum ConnectionAction { case pause, resume, forget }
             box.frame = NSRect(x: 0, y: y, width: 492, height: height)
             view.addSubview(box)
         }
-        func toggle(_ title: String, detail: String, key: String, y: CGFloat, in view: NSView) {
+        @discardableResult func toggle(_ title: String, detail: String, key: String, y: CGFloat, in view: NSView) -> NSSwitch {
             group(y: y, height: 76, in: view)
             let heading = label(title, x: 16, y: y + 42, width: 392)
             heading.font = .systemFont(ofSize: 13, weight: .medium); view.addSubview(heading)
@@ -99,6 +100,7 @@ enum ConnectionAction { case pause, resume, forget }
             toggle.identifier = NSUserInterfaceItemIdentifier(key); toggle.setAccessibilityLabel(title)
             toggle.state = defaults.bool(forKey: key) ? .on : .off
             toggle.target = self; toggle.action = #selector(changeToggle(_:)); view.addSubview(toggle)
+            return toggle
         }
         let appearance = page("appearance")
         appearance.addSubview(label("Make Tempo yours", y: 436))
@@ -144,7 +146,6 @@ enum ConnectionAction { case pause, resume, forget }
         notifications.addSubview(label("Choose how Amplifier keeps you up to date.", y: 398, secondary: true))
         toggle("Desktop notifications", detail: "Replies and requests for your input.", key: "notifications", y: 308, in: notifications)
         toggle("Include all chats", detail: "Otherwise, include pinned chats and chats you use in Amplifier.", key: "notifyAll", y: 220, in: notifications)
-        toggle("Show ongoing work above the avatar", detail: "See what’s running. The chevron tucks the bubbles away.", key: "workBubbles", y: 132, in: notifications)
         group(y: 8, height: 104, in: notifications)
         let loginHeading = label("Open Amplifier at login", x: 16, y: 76, width: 392)
         loginHeading.font = .systemFont(ofSize: 13, weight: .medium)
@@ -216,7 +217,16 @@ enum ConnectionAction { case pause, resume, forget }
         refreshConnectionActions()
         result.frame = NSRect(x: 0, y: 20, width: 492, height: 60); result.font = .systemFont(ofSize: 12); connection.addSubview(result)
         if let recoveryPath { result.stringValue = "Saved messages need recovery: \(recoveryPath)"; result.textColor = .systemRed }
-        selectPage(at: min(2, max(0, defaults.integer(forKey: "settingsPane"))))
+        let tempo = page("tempo")
+        tempo.addSubview(label("Tempo activity", y: 436))
+        tempo.addSubview(label("Keep updates together or organize them by service.", y: 398, secondary: true))
+        toggle("Show ongoing work above the avatar", detail: "See what’s running. The chevron tucks the bubbles away.", key: "workBubbles", y: 308, in: tempo)
+        toggle("Group by service", detail: "Off: sort across services. On: sort within each service.", key: "groupNoticesByService", y: 220, in: tempo)
+        serviceHeadingsToggle = toggle("Show service headings", detail: "Label and separate each group in the expanded list.", key: "showNoticeServiceHeadings", y: 132, in: tempo)
+        serviceHeadingsToggle?.state = (defaults.object(forKey: "showNoticeServiceHeadings") as? Bool ?? true) ? .on : .off
+        serviceHeadingsToggle?.isEnabled = defaults.bool(forKey: "groupNoticesByService")
+        tempo.addSubview(label("Requests for input and errors come first, then unread updates, then ongoing work. Service names remain on each card.", y: 72, secondary: true))
+        selectPage(at: min(paneNames.count - 1, max(0, defaults.integer(forKey: "settingsPane"))))
         if recoveryPath != nil { showConnection() }
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -316,6 +326,7 @@ enum ConnectionAction { case pause, resume, forget }
     @objc private func changeToggle(_ sender: NSSwitch) {
         guard let key = sender.identifier?.rawValue else { return }
         defaults.set(sender.state == .on, forKey: key); preferenceChanged(key)
+        serviceHeadingsToggle?.isEnabled = defaults.bool(forKey: "groupNoticesByService")
     }
     @objc private func selectAvatar(_ sender: NSButton) {
         guard let name = sender.identifier?.rawValue else { return }

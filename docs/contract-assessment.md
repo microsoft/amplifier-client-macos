@@ -152,3 +152,19 @@ on an installed successor, multi-PWA physical navigation, manual VoiceOver, or a
 signed upgrade. Offscreen AppKit bitmap capture omits some composited native
 controls and is not visual acceptance. MAC1/MAC3/MAC4 retain those limits.
 The existing released installation, credentials and host services were not changed.
+
+## Notice layout and multi-service ordering correction (2026-11-10)
+
+MP4 correction: the released placement helper could flip a list below its avatar
+when its computed frame crossed the top margin; viewport sizing had a separate
+below-avatar fallback. The replacement keeps the bottom anchor and limits the
+viewport to space above the artwork, preserving the user's height preference.
+Fractional artwork bounds are rounded down for available height.
+
+The requested multi-service presentation adds a global attention-priority sort
+by default, optional service grouping and independently optional headings.
+Headers participate in layout and scroll anchoring, not attention or routing.
+No host API, authority, pairing or shared contract changes are needed.
+Native edge/resize/grouping and core ordering checks are required for this
+change; signed installation, physical VoiceOver and a full display matrix remain
+separate qualification rather than implied by source tests.

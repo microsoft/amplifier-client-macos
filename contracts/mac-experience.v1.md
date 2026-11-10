@@ -62,7 +62,13 @@ Amplifier.app
    close avatar spacing. Updates preserve the reader's row and scroll offset.
    Dragging the expanded header resizes the list: full extent follows content
    up to the screen boundary; dragging shorter remembers a height cap. Both
-   modes shrink to fit fewer items. Show public action detail on one truncated
+   modes shrink to fit fewer items. The bottom stays just above the avatar;
+   reaching the top margin reduces the viewport instead of flipping the list
+   below or over the avatar. Screen clipping does not erase the remembered cap.
+   By default, sort attention across services: input/errors, unread updates,
+   then work alone. Optional grouping applies that order within each service,
+   with separately optional service headings/separators. Headings are not notices.
+   Show public action detail on one truncated
    line, with model waits labeled “Thinking…”. Response snippets are plain text;
    detail uses the available width independently of the title. Prefer public
    action metadata over generic tool names; never dump raw inputs or outputs.

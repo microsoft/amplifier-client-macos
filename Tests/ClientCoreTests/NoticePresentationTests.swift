@@ -1,6 +1,21 @@
 import XCTest
 @testable import ClientCore
 final class NoticePresentationTests: XCTestCase {
+    func testAttentionSortAcrossServicesOrWithinGroupsWithStableTies() {
+        struct Row { let id: String; let service: String; let priority: NoticePriority }
+        let rows = [Row(id: "a-unread", service: "a", priority: .unread),
+                    Row(id: "a-work", service: "a", priority: .working),
+                    Row(id: "b-unread", service: "b", priority: .unread),
+                    Row(id: "b-question", service: "b", priority: .input),
+                    Row(id: "b-error", service: "b", priority: .input),
+                    Row(id: "b-work", service: "b", priority: .working)]
+        func sorted(_ grouped: Bool) -> [String] {
+            NoticeOrdering.sorted(rows, grouped: grouped, service: { $0.service }, priority: { $0.priority }).map(\.id)
+        }
+        XCTAssertEqual(sorted(false), ["b-question", "b-error", "a-unread", "b-unread", "a-work", "b-work"])
+        XCTAssertEqual(sorted(true), ["a-unread", "a-work", "b-question", "b-error", "b-unread", "b-work"])
+        XCTAssertEqual(NoticePriority.attention(.working), .unread, "An unread chat that is also working remains ahead of work-only cards")
+    }
     func testResizeFitsThenReturnsToRememberedCap() {
         var size = NoticeListSize()
         XCTAssertEqual(size.height(content: 600, available: 900),178)

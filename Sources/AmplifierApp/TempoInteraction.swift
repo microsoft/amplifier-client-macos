@@ -39,13 +39,19 @@ import AppKit
 /// displays whose origin is negative. Input stays below the visible artwork.
 enum TempoPlacement {
     static let margin: CGFloat = 12
+    static let noticeGap: CGFloat = 8
     static func inset(_ visible: NSRect) -> NSRect { visible.insetBy(dx: margin, dy: margin) }
+    static func noticeBottom(anchor: NSRect) -> CGFloat { ceil(anchor.maxY + noticeGap) }
+    static func noticeHeight(anchor: NSRect, visible: NSRect) -> CGFloat {
+        // Round down before AppKit sizes the viewport; a fractional ink bound
+        // must not make the finished panel one pixel taller than the space.
+        max(0, floor(inset(visible).maxY - noticeBottom(anchor: anchor)))
+    }
     static func bubbles(anchor: NSRect, size: NSSize, visible: NSRect) -> NSRect {
         let safe = inset(visible)
-        let above = anchor.maxY + 8
-        let y = above + size.height <= safe.maxY ? above : anchor.minY - size.height - 8
         return NSRect(x: min(max(anchor.midX - size.width / 2, safe.minX), max(safe.minX, safe.maxX - size.width)),
-                      y: min(max(y, safe.minY), max(safe.minY, safe.maxY - size.height)), width: size.width, height: size.height)
+                      y: noticeBottom(anchor: anchor), width: size.width,
+                      height: min(size.height, noticeHeight(anchor: anchor, visible: visible)))
     }
     static func avatar(_ frame: NSRect, visible: NSRect, composerHeight: CGFloat = 0) -> NSRect {
         let visible = inset(visible)

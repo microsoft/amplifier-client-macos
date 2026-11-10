@@ -102,6 +102,22 @@ height. The list always shrinks to its contents; that temporary shrink does not
 erase the remembered maximum. Card dragging still moves Tempo. Accessible header
 actions offer Show all updates, Make list taller and Make list shorter.
 
+The list remains bottom-anchored eight points above the visible avatar artwork.
+At the top screen margin, reduce the scroll viewport; never flip the list below
+or over the avatar. Moving away from the edge restores the remembered height
+without changing the cap or fit-all preference. If even the expanded header
+cannot fit, temporarily hide the panel until space returns; retain its state.
+
+Settings → Tempo offers Group by service (off by default) and Show service
+headings (on by default, enabled only when grouping). Ungrouped sorting applies
+across all services; grouped sorting applies within each registration in saved
+service order. Requests for input/errors precede unread updates, which precede
+work-only cards. An unread chat that is also working stays in the unread tier.
+Stable ties preserve host order. Optional headings include a separator and add
+layout height but never attention counts or chat/dismiss targets. Cards retain
+service names in either mode. Reordering or toggling headings preserves the
+visible card and offset; a list already at the top remains at the top.
+
 The resting pill uses semantic colors independent of avatar shape, palette and
 finish: red for an unread session error, blue for other updates to review, teal
 for work alone, gray for idle and amber for disconnection, in that priority order.

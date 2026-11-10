@@ -1,4 +1,5 @@
 import AppKit
+setbuf(stdout, nil)
 
 MainActor.assumeIsolated {
     let app = NSApplication.shared
@@ -287,6 +288,83 @@ MainActor.assumeIsolated {
         lastX = frame.minX
     }
     print("PASS: inset bubble placement and continuous edge-to-center drag")
+
+    // Fractional artwork bounds and both sides of the old below-avatar threshold.
+    for screen in [NSRect(x: 0, y: 25, width: 1440, height: 850), NSRect(x: -1920, y: -400, width: 1920, height: 1080)] {
+        let safe = TempoPlacement.inset(screen)
+        for room: CGFloat in [500.75, 200.25, 86.75, 85.75, 42.75, 32.75, 0] {
+            let reference = NSRect(x: safe.midX, y: safe.maxY - 8 - room - 115.75, width: 160, height: 115.75)
+            let frame = TempoPlacement.bubbles(anchor: reference, size: NSSize(width: 320, height: 1000), visible: screen)
+            precondition(frame.minY == ceil(reference.maxY + 8) && frame.height == floor(room), "Screen limits reduce height, never move the bottom anchor")
+            precondition(frame.maxY <= safe.maxY, "Fractional bounds cannot overflow the screen")
+        }
+    }
+    let edgeDomain = "amplifier-notice-edge-check-" + UUID().uuidString
+    let edgeDefaults = UserDefaults(suiteName: edgeDomain)!
+    defer { edgeDefaults.removePersistentDomain(forName: edgeDomain) }
+    let edgeAnchor = TempoPanel(contentRect: NSRect(x: NSScreen.main!.visibleFrame.midX, y: NSScreen.main!.visibleFrame.minY + 60, width: 160, height: 154),
+                               styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+    let edge = TempoBubbles(defaults: edgeDefaults)
+    edge.artworkFrame = { NSRect(x: edgeAnchor.frame.minX, y: edgeAnchor.frame.minY, width: 160, height: 115.75) }
+    let edgeRows: [TempoBubbles.Row] = (0..<40).map { .init(key: "edge-\($0)", title: "Example \($0)", detail: "Thinking…", sessionID: "example-\($0)") }
+    edge.update(edgeRows, anchor: edgeAnchor, keepExisting: false)
+    let edgeFront = edge.window.contentView!.subviews.compactMap { $0 as? TempoMaterial }.last!
+    (edgeFront.content.subviews.first as! NSButton).performClick(nil)
+    edge.resizeList(to: 10000)
+    precondition(edge.fitsContents)
+    let safeTop = TempoPlacement.inset(edgeAnchor.screen!.visibleFrame).maxY
+    let originalOrigin = edgeAnchor.frame.origin
+    for room: CGFloat in [500.75, 200.25, 86.75, 85.75, 42.75, 32.75, 31.75, 5.75, 200.25] {
+        edgeAnchor.setFrameOrigin(NSPoint(x: originalOrigin.x, y: safeTop - 8 - room - 115.75))
+        edge.position(edgeAnchor)
+        let top = edge.artworkFrame!()!.maxY
+        let available = max(0, floor(safeTop - top - 8))
+        precondition(edge.listHeight == max(0, available - 32), "Moving upward shrinks the actual native viewport")
+        if available >= 32 {
+            precondition(edge.window.isVisible && abs(edge.window.frame.minY - ceil(top + 8)) < 0.01, "Native panel stays above artwork, including after space returns")
+            precondition(edge.window.frame.maxY <= safeTop + 0.01, "Native panel cannot cross the screen margin")
+        } else { precondition(!edge.window.isVisible, "No room for the header temporarily hides the list instead of flipping it") }
+    }
+    edgeAnchor.setFrameOrigin(originalOrigin); edge.position(edgeAnchor); edge.resizeList(to: 200)
+    edgeAnchor.setFrameOrigin(NSPoint(x: originalOrigin.x, y: safeTop - 8 - 80.75 - 115.75)); edge.position(edgeAnchor)
+    precondition(edge.listHeight < 200 && edgeDefaults.double(forKey: "noticeListMaximum") == 200 && !edge.fitsContents)
+    edgeAnchor.setFrameOrigin(originalOrigin); edge.position(edgeAnchor)
+    precondition(edge.listHeight == 200, "Screen clipping must not erase the user's saved height cap")
+    edge.update(Array(edgeRows.prefix(2)), anchor: edgeAnchor, keepExisting: true)
+    precondition(edge.listHeight == 116 && edgeDefaults.double(forKey: "noticeListMaximum") == 200)
+    edge.close(); edgeAnchor.orderOut(nil)
+    print("PASS: native top-edge resize/drag, fractional ink bounds, fixed bottom anchor, hidden/recovered header and remembered cap")
+
+    let grouped = TempoBubbles(defaults: noticeDefaults); grouped.availableHeightOverride = 700
+    let groupRows: [TempoBubbles.Row] = (0..<8).map {
+        .init(key: "group-\($0)", title: "Example \($0)", detail: "Response ready", sessionID: "route-\($0)",
+              serviceID: $0 < 4 ? "a" : "b", serviceName: $0 < 4 ? "Office" : "Lab")
+    }
+    grouped.update(groupRows, anchor: window, keepExisting: false, showServiceHeadings: true)
+    let groupFront = grouped.window.contentView!.subviews.compactMap { $0 as? TempoMaterial }.last!
+    (groupFront.content.subviews.first as! NSButton).performClick(nil)
+    grouped.resizeList(to: 10000)
+    precondition(grouped.listHeight == 552, "Fit-all accounts for two group headings without counting them as notices")
+    grouped.resizeList(to: 178)
+    func groupScroll() -> NSScrollView { grouped.window.contentView!.subviews.compactMap { $0 as? NSScrollView }.first! }
+    let groupList = groupScroll(), groupStack = groupList.documentView as! NSStackView
+    precondition(groupStack.arrangedSubviews.count == 10)
+    groupList.contentView.scroll(to: NSPoint(x: 0, y: 120))
+    let marked = groupStack.arrangedSubviews.compactMap { $0 as? TempoMaterial }.first { $0.frame.intersects(groupList.documentVisibleRect) }!
+    let markedIndex = (marked.content.subviews.first as! NSButton).tag
+    let markedOffset = groupList.documentVisibleRect.maxY - marked.frame.maxY
+    grouped.update(groupRows, anchor: window, keepExisting: false, showServiceHeadings: false)
+    let newList = groupScroll(), newStack = newList.documentView as! NSStackView
+    precondition(newStack.arrangedSubviews.count == 8)
+    let sameCard = newStack.arrangedSubviews[markedIndex] as! TempoMaterial
+    precondition(abs(newList.documentVisibleRect.maxY - sameCard.frame.maxY - markedOffset) < 0.01, "Removing group headings preserves the visible card and scroll offset")
+    var groupRoute = "", groupDismiss = ""
+    grouped.openChat = { groupRoute = $0 }; grouped.dismiss = { groupDismiss = $0.key }
+    (sameCard.content.subviews.first as! NSButton).performClick(nil)
+    sameCard.content.subviews.compactMap { $0 as? NSButton }.first { $0.toolTip == "Hide from Tempo; keep unread" }!.performClick(nil)
+    precondition(groupRoute == "route-\(markedIndex)" && groupDismiss == "group-\(markedIndex)", "Headings never offset chat or dismiss targets")
+    grouped.close()
+    print("PASS: optional group headings, fit-all content size, scroll anchor and card action identity")
     let composer = TempoComposer(chats: [("chat-1", "Existing chat")], anchor: window.frame)
     let send = composer.sendButton
     precondition(!send.isEnabled, "Empty messages must not send")
@@ -334,9 +412,18 @@ MainActor.assumeIsolated {
     let relay = appearance.subviews.compactMap { $0 as? NSButton }.first { $0.identifier?.rawValue == "relay" }!
     relay.performClick(nil)
     precondition(preferences.string(forKey: "shape") == "relay" && changes == ["shape"] && connections == 0)
-    let work = tabs.tabViewItems[1].view!.subviews.compactMap { $0 as? NSSwitch }.first { $0.identifier?.rawValue == "workBubbles" }!
+    let work = tabs.tabViewItems[3].view!.subviews.compactMap { $0 as? NSSwitch }.first { $0.identifier?.rawValue == "workBubbles" }!
     work.state = .on; NSApp.sendAction(work.action!, to: work.target, from: work)
     precondition(preferences.bool(forKey: "workBubbles") && connections == 0)
+    let grouping = tabs.tabViewItems[3].view!.subviews.compactMap { $0 as? NSSwitch }.first { $0.identifier?.rawValue == "groupNoticesByService" }!
+    let headings = tabs.tabViewItems[3].view!.subviews.compactMap { $0 as? NSSwitch }.first { $0.identifier?.rawValue == "showNoticeServiceHeadings" }!
+    precondition(grouping.state == .off && headings.state == .on && !headings.isEnabled, "Default is a global attention sort; headings require grouping")
+    grouping.state = .on; NSApp.sendAction(grouping.action!, to: grouping.target, from: grouping)
+    precondition(headings.isEnabled && preferences.bool(forKey: "groupNoticesByService"))
+    headings.state = .off; NSApp.sendAction(headings.action!, to: headings.target, from: headings)
+    precondition(!preferences.bool(forKey: "showNoticeServiceHeadings") && changes.last == "showNoticeServiceHeadings")
+    grouping.state = .off; NSApp.sendAction(grouping.action!, to: grouping.target, from: grouping)
+    precondition(!headings.isEnabled && headings.state == .off, "Turning grouping off preserves the separate heading choice")
     let fields = tabs.tabViewItems[2].view!.subviews.compactMap { $0 as? NSTextField }
     fields.first { $0.isEditable && !($0 is NSSecureTextField) }!.stringValue = "https://example.invalid"
     precondition(connections == 0 && preferences.string(forKey: "endpoint") == "http://127.0.0.1:8941")
@@ -354,7 +441,7 @@ MainActor.assumeIsolated {
     finish.selectedSegment = 1; NSApp.sendAction(finish.action!, to: finish.target, from: finish)
     precondition(preferences.string(forKey: "finish") == "dark" && changes.last == "finish" && connections == 0)
     precondition((cards + swatches).allSatisfy { !$0.isBordered && $0.bezelColor == nil }, "Content choices should not be prominent glass tiles")
-    precondition(settings.window!.toolbar!.items.count == 3 && !settings.window!.toolbar!.allowsUserCustomization)
+    precondition(settings.window!.toolbar!.items.count == 4 && !settings.window!.toolbar!.allowsUserCustomization)
     settings.showConnection()
     precondition(settings.window!.title == "Connection" && preferences.integer(forKey: "settingsPane") == 2)
     let connectionButtons = tabs.tabViewItems[2].view!.subviews.compactMap { $0 as? NSButton }
