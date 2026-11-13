@@ -111,8 +111,8 @@ import CoreText
 
     func setBubblesVisible(_ visible: Bool) {
         activityButton.image = NSImage(systemSymbolName: visible ? "chevron.down" : "bell", accessibilityDescription: nil)
-        activityButton.toolTip = visible ? "Collapse updates" : "Show updates"
-        activityButton.setAccessibilityLabel(visible ? "Collapse updates" : "Show updates")
+        activityButton.toolTip = visible ? "Hide updates" : "Show updates"
+        activityButton.setAccessibilityLabel(visible ? "Hide updates" : "Show updates")
     }
 
     func updateStatus(connected: Bool, working: Int, unread: Int, error: Bool = false, detail: String) {

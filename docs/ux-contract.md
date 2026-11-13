@@ -238,3 +238,25 @@ edge with more content beyond it; a complete first/last card and a list that fit
 remain fully visible. The fixed header stays crisp. The fade follows scrolling
 and resizing without an independent animation, and the transparent clip view
 continues to catch wheel events across gaps and faded edges.
+
+### Notice visibility
+
+Settings → Tempo exposes a native three-way Show notices control: Visible
+(default), Hidden, and On hover. Inclusion of ongoing work and service grouping
+remain separate choices. Visible shows available notices, including unread-only
+activity; Hidden keeps the list tucked away. Neither stops the avatar's status
+indication or changes host attention or desktop notification permission.
+
+On hover reveals the saved collapsed/expanded view when the pointer enters Tempo.
+The list remains open over its cards/header, and a 650 ms leave grace permits
+crossing the gap. An active mouse drag holds it open through resizing or moving.
+Leaving hides the panel without discarding expansion, height, grouping or scroll.
+The expansion choice also persists across restarts and an empty feed. No focus
+change or host acknowledgement occurs. Pointer geometry sampling runs only while
+hover mode has a visible, connected avatar; hidden/visible modes need no sampler.
+
+The explicit avatar Show/Hide action switches Visible/Hidden. In On hover it
+reveals or dismisses the current visit without changing the saved mode. An
+explicit non-pointer reveal remains reachable until dismissed or a hover visit
+ends. Escape hides the current hover visit until exit/reentry; in Visible it
+chooses Hidden. The header's Collapse/Expand controls only the view shape.

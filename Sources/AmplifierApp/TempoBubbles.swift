@@ -38,6 +38,7 @@ import ClientCore
     var fitsContents: Bool { sizing.fitsContents }
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        listExpanded = defaults.bool(forKey: "noticeListExpanded")
         sizing = NoticeListSize(maximum: defaults.object(forKey: "noticeListMaximum") as? Double ?? 178,
                                 fitsContents: defaults.bool(forKey: "noticeListFitsContents"))
         window = NoticePanel(contentRect: NSRect(x: 0, y: 0, width: 320, height: 100),
@@ -192,7 +193,9 @@ import ClientCore
         renderedKeys = rows.map(\.key)
         if let anchor = window.anchor { position(anchor) }
     }
-    @objc private func toggleList() { listExpanded.toggle(); render() }
+    @objc private func toggleList() {
+        listExpanded.toggle(); defaults.set(listExpanded, forKey: "noticeListExpanded"); render()
+    }
     #if NATIVE_CHECK
     var availableHeightOverride: CGFloat?
     #endif
@@ -241,13 +244,70 @@ import ClientCore
         if suppressedForSpace { window.orderFrontRegardless() }
         suppressedForSpace = false
     }
-    func close() { window.anchor = nil; window.orderOut(nil); rows = []; renderedKeys = []; renderedCards = [:]; scrollView = nil; listExpanded = false; suppressedForSpace = false }
+    // Hover-out retains the actual document and its scroll bookmark. A later
+    // snapshot is reconciled normally when it is shown again.
+    func hide() { window.orderOut(nil) }
+    func close() { window.anchor = nil; window.orderOut(nil); rows = []; renderedKeys = []; renderedCards = [:]; scrollView = nil; suppressedForSpace = false }
 
     @objc private func select(_ sender: NSButton) {
         guard rows.indices.contains(sender.tag) else { return }; openChat?(rows[sender.tag].sessionID)
     }
     @objc private func dismissRow(_ sender: NSButton) {
         guard rows.indices.contains(sender.tag) else { return }; dismiss?(rows[sender.tag])
+    }
+}
+
+/// Observe only pointer geometry, without activating an app or installing an
+/// event tap. The lightweight sampler runs only for a visible, connected avatar
+/// in hover mode; common run-loop modes keep dragging/resizing continuous.
+@MainActor final class TempoNoticeVisibility {
+    private let defaults: UserDefaults
+    private(set) var state: NoticeVisibilityState
+    private var enabled = false
+    private var timer: Timer?
+    private var leaveAt: TimeInterval?
+    var regions: () -> [NSRect] = { [] }
+    var onChange: (() -> Void)?
+    var isVisible: Bool { enabled && state.isVisible }
+    var isMonitoring: Bool { timer != nil }
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        state = NoticeVisibilityState(mode: NoticeVisibility(rawValue: defaults.string(forKey: "noticeVisibility") ?? "") ?? .visible)
+    }
+    deinit { timer?.invalidate() }
+    func synchronize(enabled: Bool) {
+        self.enabled = enabled
+        let mode = NoticeVisibility(rawValue: defaults.string(forKey: "noticeVisibility") ?? "") ?? .visible
+        if state.mode != mode { state = NoticeVisibilityState(mode: mode); leaveAt = nil }
+        guard enabled && mode == .hover else {
+            timer?.invalidate(); timer = nil; leaveAt = nil
+            state = NoticeVisibilityState(mode: mode); return
+        }
+        if timer == nil {
+            let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.sample(point: NSEvent.mouseLocation, now: ProcessInfo.processInfo.systemUptime,
+                                 dragging: NSEvent.pressedMouseButtons & 1 != 0)
+                }
+            }
+            self.timer = timer; RunLoop.main.add(timer, forMode: .common)
+        }
+    }
+    func sample(point: NSPoint, now: TimeInterval, dragging: Bool = false) {
+        guard enabled, state.mode == .hover else { return }
+        let wasVisible = isVisible
+        if regions().contains(where: { $0.contains(point) }) || (dragging && state.hovered) {
+            leaveAt = nil; state.setHovered(true)
+        } else if state.hovered {
+            if let leaveAt, now >= leaveAt { self.leaveAt = nil; state.setHovered(false) }
+            else if leaveAt == nil { leaveAt = now + 0.65 }
+        }
+        if isVisible != wasVisible { onChange?() }
+    }
+    func toggle() { state.toggle(); saveAndNotify() }
+    func dismiss() { state.dismiss(); saveAndNotify() }
+    private func saveAndNotify() {
+        defaults.set(state.mode.rawValue, forKey: "noticeVisibility"); onChange?()
     }
 }
 

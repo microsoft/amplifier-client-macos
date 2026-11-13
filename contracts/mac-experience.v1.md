@@ -110,3 +110,10 @@ What browser handoff coverage is needed before adding another supported browser?
 2026-11-10: MP3 extended for combined visibility across explicitly registered
 services, service identification and truthful partial-unavailability reporting.
 Host attention authority and the work/attention distinction are unchanged.
+
+2026-11-13: MP4 extended at the product owner's request: notices have Visible,
+Hidden and On hover presentation choices, independent of their collapsed/expanded
+view and inclusion of ongoing work. Hover keeps the list usable while traversing
+to its cards or dragging/resizing; leaving preserves the view/scroll position.
+Explicit accessible Show/Hide and Escape remain available. Avatar activity, host
+attention and desktop notification permission do not depend on this choice.

@@ -31,6 +31,7 @@ enum ConnectionAction { case pause, resume, forget }
     private let pages = NSTabView()
     private var swatches: [NSButton] = []
     private let finish = NSSegmentedControl(labels: ["Clear", "Dark"], trackingMode: .selectOne, target: nil, action: nil)
+    private let noticeVisibility = NSSegmentedControl(labels: NoticeVisibility.allCases.map(\.title), trackingMode: .selectOne, target: nil, action: nil)
     private let paneNames = ["Appearance", "Notifications", "Connection", "Tempo"]
     private let paneIcons = ["paintpalette", "bell", "network", "list.bullet"]
     private var serviceHeadingsToggle: NSSwitch?
@@ -219,13 +220,21 @@ enum ConnectionAction { case pause, resume, forget }
         if let recoveryPath { result.stringValue = "Saved messages need recovery: \(recoveryPath)"; result.textColor = .systemRed }
         let tempo = page("tempo")
         tempo.addSubview(label("Tempo activity", y: 436))
-        tempo.addSubview(label("Keep updates together or organize them by service.", y: 398, secondary: true))
-        toggle("Show ongoing work above the avatar", detail: "See what’s running. The chevron tucks the bubbles away.", key: "workBubbles", y: 308, in: tempo)
-        toggle("Group by service", detail: "Off: sort across services. On: sort within each service.", key: "groupNoticesByService", y: 220, in: tempo)
-        serviceHeadingsToggle = toggle("Show service headings", detail: "Label and separate each group in the expanded list.", key: "showNoticeServiceHeadings", y: 132, in: tempo)
+        tempo.addSubview(label("Choose when notices appear and how they’re organized.", y: 398, secondary: true))
+        let visibilityLabel = label("Show notices", y: 360, width: 110)
+        visibilityLabel.font = .systemFont(ofSize: 13); tempo.addSubview(visibilityLabel)
+        noticeVisibility.frame = NSRect(x: 112, y: 354, width: 380, height: 32)
+        noticeVisibility.identifier = NSUserInterfaceItemIdentifier("noticeVisibility")
+        noticeVisibility.setAccessibilityLabel("Show notices")
+        noticeVisibility.target = self; noticeVisibility.action = #selector(changeNoticeVisibility(_:))
+        updateNoticeVisibility(); tempo.addSubview(noticeVisibility)
+        tempo.addSubview(label("On hover: point at Tempo to reveal notices. Your collapsed or expanded view is remembered.", y: 310, secondary: true))
+        toggle("Include ongoing work", detail: "Include working chats alongside updates that need attention.", key: "workBubbles", y: 222, in: tempo)
+        toggle("Group by service", detail: "Off: sort across services. On: sort within each service.", key: "groupNoticesByService", y: 134, in: tempo)
+        serviceHeadingsToggle = toggle("Show service headings", detail: "Label and separate each group in the expanded list.", key: "showNoticeServiceHeadings", y: 46, in: tempo)
         serviceHeadingsToggle?.state = (defaults.object(forKey: "showNoticeServiceHeadings") as? Bool ?? true) ? .on : .off
         serviceHeadingsToggle?.isEnabled = defaults.bool(forKey: "groupNoticesByService")
-        tempo.addSubview(label("Requests for input and errors come first, then unread updates, then ongoing work. Service names remain on each card.", y: 72, secondary: true))
+        tempo.addSubview(label("Requests for input and errors come first, then unread updates, then ongoing work.", y: 2, secondary: true))
         selectPage(at: min(paneNames.count - 1, max(0, defaults.integer(forKey: "settingsPane"))))
         if recoveryPath != nil { showConnection() }
     }
@@ -327,6 +336,15 @@ enum ConnectionAction { case pause, resume, forget }
         guard let key = sender.identifier?.rawValue else { return }
         defaults.set(sender.state == .on, forKey: key); preferenceChanged(key)
         serviceHeadingsToggle?.isEnabled = defaults.bool(forKey: "groupNoticesByService")
+    }
+    func updateNoticeVisibility() {
+        let mode = NoticeVisibility(rawValue: defaults.string(forKey: "noticeVisibility") ?? "") ?? .visible
+        noticeVisibility.selectedSegment = NoticeVisibility.allCases.firstIndex(of: mode)!
+    }
+    @objc private func changeNoticeVisibility(_ sender: NSSegmentedControl) {
+        guard NoticeVisibility.allCases.indices.contains(sender.selectedSegment) else { return }
+        defaults.set(NoticeVisibility.allCases[sender.selectedSegment].rawValue, forKey: "noticeVisibility")
+        preferenceChanged("noticeVisibility")
     }
     @objc private func selectAvatar(_ sender: NSButton) {
         guard let name = sender.identifier?.rawValue else { return }
