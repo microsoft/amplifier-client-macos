@@ -1,6 +1,27 @@
 import XCTest
 @testable import ClientCore
 final class NoticePresentationTests: XCTestCase {
+    func testNoticeVisibilityChoicesAndExplicitHoverDismissal() {
+        var state = NoticeVisibilityState(mode: .visible)
+        XCTAssertTrue(state.isVisible)
+        state.setHovered(false); XCTAssertTrue(state.isVisible)
+        state.toggle(); XCTAssertEqual(state.mode, .hidden); XCTAssertFalse(state.isVisible)
+        state.setHovered(true); XCTAssertFalse(state.isVisible)
+        state.toggle(); XCTAssertEqual(state.mode, .visible); XCTAssertTrue(state.isVisible)
+        state.dismiss(); XCTAssertEqual(state.mode, .hidden)
+
+        state = NoticeVisibilityState(mode: .hover)
+        XCTAssertFalse(state.isVisible)
+        state.setHovered(true); XCTAssertTrue(state.isVisible)
+        state.dismiss(); XCTAssertFalse(state.isVisible)
+        state.setHovered(true); XCTAssertFalse(state.isVisible, "Polling within the same visit cannot reopen dismissed notices")
+        state.setHovered(false); state.setHovered(true); XCTAssertTrue(state.isVisible)
+        state.setHovered(false); XCTAssertFalse(state.isVisible)
+        state.toggle(); XCTAssertTrue(state.isVisible, "Explicit keyboard/assistive action can reveal without pointing")
+        XCTAssertEqual(state.mode, .hover)
+        state.dismiss(); XCTAssertFalse(state.isVisible)
+        state.setHovered(true); XCTAssertTrue(state.isVisible, "A dismissed explicit peek cannot suppress the next hover visit")
+    }
     func testAttentionSortAcrossServicesOrWithinGroupsWithStableTies() {
         struct Row { let id: String; let service: String; let priority: NoticePriority }
         let rows = [Row(id: "a-unread", service: "a", priority: .unread),

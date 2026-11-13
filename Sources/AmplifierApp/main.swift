@@ -72,9 +72,8 @@ enum Keychain {
     private var composer: TempoComposer?
     private var positioning = false
     private let bubbles = TempoBubbles()
+    private let noticeVisibility = TempoNoticeVisibility()
     private var bubblesOpen = false
-    private var bubblesManual = false
-    private var autoBubblesSuppressed = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -137,9 +136,20 @@ enum Keychain {
         }
         surface.onChat = { [weak self] in self?.showComposer() }
         surface.onActivity = { [weak self] anchor in self?.showActivity(anchor) }
+        noticeVisibility.regions = { [weak self] in
+            guard let self, self.panel.isVisible else { return [] }
+            var regions = [self.panel.frame]
+            if self.bubbles.window.isVisible { regions.append(self.bubbles.window.frame) }
+            return regions
+        }
+        noticeVisibility.onChange = { [weak self] in
+            guard let self else { return }
+            self.settings?.updateNoticeVisibility()
+            self.refreshBubbles(); self.requestVisibleDetails()
+        }
         surface.installContextMenu(makeOptionsMenu())
         panel.onEscape = { [weak self] in
-            self?.autoBubblesSuppressed = true; self?.closeBubbles(); self?.surface.dismissControls()
+            self?.noticeVisibility.dismiss(); self?.surface.dismissControls()
         }
         panel.contentView = surface
         // A wider control strip must remain reachable after restoring an old position.
@@ -537,13 +547,12 @@ enum Keychain {
         composer?.position(panel.frame)
     }
     private func closeBubbles() {
-        bubbles.close(); bubblesOpen = false; bubblesManual = false
+        bubbles.hide(); bubblesOpen = false
         surface?.setBubblesVisible(false); surface?.setPresenting(false)
     }
     private func showActivity(_ anchor: NSView) {
-        if bubblesOpen { autoBubblesSuppressed = true; closeBubbles(); return }
         guard connected else { showSettings(); return }
-        bubblesManual = true; bubblesOpen = true; refreshBubbles(); requestVisibleDetails()
+        noticeVisibility.toggle()
     }
     /// Keep ongoing work visible without adding it to the attention count.
     private func activityRows() -> [TempoBubbles.Row] {
@@ -586,13 +595,11 @@ enum Keychain {
         return NoticeOrdering.sorted(all, grouped: defaults.bool(forKey: "groupNoticesByService"), service: { $0.serviceID }, priority: { $0.priority })
     }
     private func refreshBubbles() {
-        guard connected, panel.isVisible else { closeBubbles(); return }
-        let work = online.reduce(0) { $0 + ($1.latest?.workingCount ?? 0) }
-        if work == 0 { autoBubblesSuppressed = false }
-        if defaults.bool(forKey: "workBubbles") && work > 0 && !autoBubblesSuppressed { bubblesOpen = true }
-        guard bubblesOpen else { return }
+        noticeVisibility.synchronize(enabled: connected && panel.isVisible)
+        guard noticeVisibility.isVisible else { closeBubbles(); return }
         let rows = activityRows()
-        if rows.isEmpty { closeBubbles(); return }
+        if rows.isEmpty { bubbles.close(); closeBubbles(); return }
+        bubblesOpen = true
         bubbles.openChat = { [weak self] key in
             guard let self, let target = self.bubbleTargets[key] else { return }
             self.open(target)
@@ -742,10 +749,6 @@ enum Keychain {
             UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { [weak self] _, _ in
                 Task { @MainActor in self?.refreshNotificationSettings() }
             }
-        }
-        if key == "workBubbles" {
-            autoBubblesSuppressed = false
-            if !defaults.bool(forKey: key) && !bubblesManual { closeBubbles() }
         }
         rebuildMenu(); requestVisibleDetails()
     }

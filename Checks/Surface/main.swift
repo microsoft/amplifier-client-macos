@@ -289,9 +289,95 @@ MainActor.assumeIsolated {
     bubbles.close()
     print("PASS: twelve rows, eleven attention items, work-only labeling, stack, bounded scroll and collapse")
     surface.setBubblesVisible(true)
-    precondition(surface.activityButton.toolTip == "Collapse updates")
+    precondition(surface.activityButton.toolTip == "Hide updates")
     surface.setBubblesVisible(false)
     print("PASS: empty activity hidden, exact chat action, parent attachment and collapse")
+
+    let visibility = TempoNoticeVisibility(defaults: noticeDefaults)
+    visibility.regions = { [NSRect(x: 0, y: 0, width: 160, height: 154),
+                            NSRect(x: -100, y: 162, width: 320, height: 210)] }
+    @MainActor func presentNotices() {
+        if visibility.isVisible { bubbles.update(many, anchor: window, keepExisting: false) }
+        else { bubbles.hide() }
+    }
+    visibility.onChange = { presentNotices() }
+    noticeDefaults.set("hover", forKey: "noticeVisibility")
+    visibility.synchronize(enabled: true); presentNotices()
+    precondition(!bubbles.window.isVisible && visibility.isMonitoring)
+    visibility.sample(point: NSPoint(x: 80, y: 80), now: 0)
+    precondition(bubbles.window.isVisible && !bubbles.listExpanded)
+    clickPadding(bubbles.window.contentView!.subviews.compactMap { $0 as? TempoMaterial }.last!)
+    let hoverList = bubbles.window.contentView!.subviews.compactMap { $0 as? NSScrollView }.first!
+    hoverList.contentView.scroll(to: NSPoint(x: 0, y: 200)); hoverList.reflectScrolledClipView(hoverList.contentView)
+    let hoverPosition = hoverList.documentVisibleRect
+    visibility.sample(point: NSPoint(x: 80, y: 158), now: 0.1) // gap
+    visibility.sample(point: NSPoint(x: 80, y: 200), now: 0.4) // notice
+    precondition(bubbles.window.isVisible, "Crossing the avatar/list gap must not hide notices")
+    let outside = NSPoint(x: 600, y: 600)
+    visibility.sample(point: outside, now: 0.5)
+    visibility.sample(point: outside, now: 1.2)
+    precondition(!bubbles.window.isVisible && bubbles.listExpanded)
+    visibility.sample(point: NSPoint(x: 80, y: 80), now: 1.3)
+    let reshown = bubbles.window.contentView!.subviews.compactMap { $0 as? NSScrollView }.first!
+    precondition(bubbles.window.isVisible && bubbles.listExpanded && reshown.documentVisibleRect == hoverPosition,
+                 "Hover-out/in preserves expansion and scroll")
+    visibility.dismiss(); visibility.sample(point: NSPoint(x: 80, y: 80), now: 1.4); presentNotices()
+    precondition(!bubbles.window.isVisible, "A refresh cannot undo Escape during a hover visit")
+    visibility.sample(point: outside, now: 1.5); visibility.sample(point: outside, now: 2.2)
+    visibility.sample(point: NSPoint(x: 80, y: 80), now: 2.3)
+    visibility.sample(point: outside, now: 2.4, dragging: true)
+    precondition(bubbles.window.isVisible, "Dragging or resizing holds the list open")
+    visibility.sample(point: outside, now: 2.5); visibility.sample(point: outside, now: 3.2)
+    precondition(!bubbles.window.isVisible)
+    noticeDefaults.set("hidden", forKey: "noticeVisibility"); visibility.synchronize(enabled: true); presentNotices()
+    precondition(!visibility.isMonitoring && !visibility.isVisible)
+    visibility.toggle(); precondition(visibility.isVisible && noticeDefaults.string(forKey: "noticeVisibility") == "visible")
+    visibility.synchronize(enabled: false); presentNotices()
+    precondition(!visibility.isVisible && !visibility.isMonitoring)
+    precondition(TempoBubbles(defaults: noticeDefaults).listExpanded, "Expansion is an independent persisted choice")
+    bubbles.close()
+    print("PASS: visible/hidden/hover modes, gap grace, notice hover, drag hold, Escape, reconnect gating and preserved expansion/scroll")
+
+    if CommandLine.arguments.contains("--hover-check"), CGPreflightPostEventAccess(), let screen = NSScreen.main {
+        let pointer = NSEvent.mouseLocation
+        let foreground = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        let domain = "amplifier-hover-physical-" + UUID().uuidString
+        let prefs = UserDefaults(suiteName: domain)!
+        prefs.set("hover", forKey: "noticeVisibility"); prefs.set(true, forKey: "noticeListExpanded")
+        let anchor = TempoPanel(contentRect: NSRect(x: screen.visibleFrame.midX - 80, y: screen.visibleFrame.midY - 230, width: 160, height: 154),
+                                styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        anchor.isOpaque = false; anchor.backgroundColor = .clear; anchor.hasShadow = false
+        let fixture = TempoSurface(artwork: NSImageView(image: NSImage(systemSymbolName: "sparkles", accessibilityDescription: "Synthetic avatar")!))
+        anchor.contentView = fixture; anchor.orderFrontRegardless()
+        let notices = TempoBubbles(defaults: prefs), controller = TempoNoticeVisibility(defaults: prefs)
+        controller.regions = { [anchor.frame] + (notices.window.isVisible ? [notices.window.frame] : []) }
+        controller.onChange = {
+            if controller.isVisible { notices.update(many, anchor: anchor, keepExisting: false) }
+            else { notices.hide() }
+        }
+        @MainActor func movePointer(_ point: NSPoint, wait: Double) {
+            CGEvent(mouseEventSource: nil, mouseType: .mouseMoved,
+                    mouseCursorPosition: NSPoint(x: point.x, y: screen.frame.maxY - point.y), mouseButton: .left)?.post(tap: .cghidEventTap)
+            RunLoop.current.run(until: Date().addingTimeInterval(wait))
+        }
+        let away = NSPoint(x: screen.visibleFrame.minX + 20, y: screen.visibleFrame.minY + 20)
+        movePointer(away, wait: 0.1); controller.synchronize(enabled: true)
+        movePointer(NSPoint(x: anchor.frame.midX, y: anchor.frame.midY), wait: 0.25)
+        precondition(notices.window.isVisible && notices.listExpanded, "Actual pointer reveals saved expanded view")
+        let scrolling = notices.window.contentView!.subviews.compactMap { $0 as? NSScrollView }.first!
+        scrolling.contentView.scroll(to: NSPoint(x: 0, y: 200)); scrolling.reflectScrolledClipView(scrolling.contentView)
+        movePointer(NSPoint(x: anchor.frame.midX, y: anchor.frame.maxY + 4), wait: 0.2)
+        movePointer(NSPoint(x: notices.window.frame.midX, y: notices.window.frame.midY), wait: 0.8)
+        precondition(notices.window.isVisible, "Actual pointer can cross the gap and stay over cards")
+        movePointer(away, wait: 0.85); precondition(!notices.window.isVisible)
+        movePointer(NSPoint(x: anchor.frame.midX, y: anchor.frame.midY), wait: 0.25)
+        let returned = notices.window.contentView!.subviews.compactMap { $0 as? NSScrollView }.first!
+        precondition(notices.window.isVisible && notices.listExpanded && abs(returned.documentVisibleRect.minY - 200) < 1)
+        precondition(NSWorkspace.shared.frontmostApplication?.processIdentifier == foreground, "Hover must not activate the native app")
+        controller.synchronize(enabled: false); controller.onChange = nil; notices.close(); anchor.orderOut(nil)
+        movePointer(pointer, wait: 0.1); prefs.removePersistentDomain(forName: domain)
+        print("PASS: actual Mac pointer hover, gap traversal, card stay, leave/reenter, scroll preservation and unchanged foreground app")
+    }
 
     // Screen geometry: all corners, display origins, varying input height, and
     // progressive recentering after leaving either edge.
@@ -375,6 +461,7 @@ MainActor.assumeIsolated {
     edge.close(); edgeAnchor.orderOut(nil)
     print("PASS: native top-edge resize/drag, fractional ink bounds, fixed bottom anchor, hidden/recovered header and remembered cap")
 
+    noticeDefaults.set(false, forKey: "noticeListExpanded") // Independent grouping fixture starts collapsed.
     let grouped = TempoBubbles(defaults: noticeDefaults); grouped.availableHeightOverride = 700
     let groupRows: [TempoBubbles.Row] = (0..<8).map {
         .init(key: "group-\($0)", title: "Example \($0)", detail: "Response ready", sessionID: "route-\($0)",
@@ -456,6 +543,14 @@ MainActor.assumeIsolated {
     work.state = .on; NSApp.sendAction(work.action!, to: work.target, from: work)
     precondition(preferences.bool(forKey: "workBubbles") && connections == 0)
     let grouping = tabs.tabViewItems[3].view!.subviews.compactMap { $0 as? NSSwitch }.first { $0.identifier?.rawValue == "groupNoticesByService" }!
+    let visibilityChoice = tabs.tabViewItems[3].view!.subviews.compactMap { $0 as? NSSegmentedControl }.first!
+    precondition(visibilityChoice.segmentCount == 3 && visibilityChoice.selectedSegment == 0)
+    for (index, mode) in NoticeVisibility.allCases.enumerated() {
+        visibilityChoice.selectedSegment = index; NSApp.sendAction(visibilityChoice.action!, to: visibilityChoice.target, from: visibilityChoice)
+        precondition(preferences.string(forKey: "noticeVisibility") == mode.rawValue && changes.last == "noticeVisibility" && connections == 0)
+    }
+    preferences.set("hidden", forKey: "noticeVisibility"); settings.updateNoticeVisibility()
+    precondition(visibilityChoice.selectedSegment == 1, "An explicit avatar action updates the open Settings choice")
     let headings = tabs.tabViewItems[3].view!.subviews.compactMap { $0 as? NSSwitch }.first { $0.identifier?.rawValue == "showNoticeServiceHeadings" }!
     precondition(grouping.state == .off && headings.state == .on && !headings.isEnabled, "Default is a global attention sort; headings require grouping")
     grouping.state = .on; NSApp.sendAction(grouping.action!, to: grouping.target, from: grouping)

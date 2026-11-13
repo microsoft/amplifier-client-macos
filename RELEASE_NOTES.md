@@ -1,4 +1,25 @@
-# Amplifier for Mac 0.1.7
+# Amplifier for Mac 0.1.8
+
+Choose when Tempo's notices appear in Settings → Tempo: **Visible**, **Hidden**,
+or **On hover**. The avatar keeps showing activity and attention in all three.
+
+- Hover reveals the saved collapsed or expanded view. Move onto its cards to
+  interact; leaving tucks it away with a short grace period for crossing the gap.
+- Dragging and resizing keep the list available. Hover-out/in retains its scroll
+  position, height and grouping. Collapsed/expanded choice now survives restart.
+- Explicit Show/Hide and Escape remain available. In hover mode they affect the
+  current visit without changing the saved mode.
+- Ongoing-work inclusion is independent of visibility. Visible mode also shows
+  available unread-only updates. The default remains Visible.
+
+No host update, browser permission or attention acknowledgement is introduced.
+Existing connections, saved replies, notification permissions and avatar settings
+are preserved. Core/native checks and actual synthetic Mac pointer acceptance
+cover the changed behavior, including unchanged foreground focus. Signed app/DMG
+and upgrade qualification precede publication; a full VoiceOver/display matrix
+remains separate coverage.
+
+## Previous release: 0.1.7
 
 Tempo's scrolling notice list softly fades clipped cards at the top and bottom
 instead of ending with a hard visual cut. Only edges with more content fade;

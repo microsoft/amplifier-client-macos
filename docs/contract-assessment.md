@@ -178,3 +178,14 @@ fit-all removal, mask placement and independent event coverage/header. Physical
 synthetic-window capture checks the actual glass compositing separately; this is
 not a new full display/VoiceOver matrix. Signed-candidate release checks remain
 separate from source/component and visual qualification.
+
+## Optional notice hover presentation (2026-11-13)
+
+User-requested MP4 presentation change adds Visible/Hidden/On hover independently
+of ongoing-work inclusion and collapsed/expanded form. This is native Mac scope;
+no shared web-client source, host API, desktop permission or attention semantics
+change. Component qualification must cover current-visit dismissal, delayed leave,
+avatar-to-card traversal, drag hold, disabled monitoring, persisted expansion and
+scroll, and Settings control synchronization. Physical synthetic pointer checking
+and signed-candidate qualification are recorded separately; full VoiceOver and
+all Spaces/display arrangements are not inferred from source checks.

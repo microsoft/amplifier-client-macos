@@ -1,5 +1,42 @@
 import Foundation
 
+public enum NoticeVisibility: String, CaseIterable {
+    case visible, hidden, hover
+    public var title: String { switch self { case .visible: return "Visible"; case .hidden: return "Hidden"; case .hover: return "On hover" } }
+}
+
+/// Presentation only: never acknowledges attention or changes which rows exist.
+public struct NoticeVisibilityState {
+    public private(set) var mode: NoticeVisibility
+    public private(set) var hovered = false
+    private var dismissedHover = false
+    private var explicitPeek = false
+    public init(mode: NoticeVisibility) { self.mode = mode }
+    public var isVisible: Bool {
+        switch mode {
+        case .visible: return true
+        case .hidden: return false
+        case .hover: return explicitPeek || (hovered && !dismissedHover)
+        }
+    }
+    public mutating func setHovered(_ value: Bool) {
+        guard hovered != value else { return }
+        hovered = value; dismissedHover = false; explicitPeek = false
+    }
+    public mutating func toggle() {
+        switch mode {
+        case .visible: mode = .hidden
+        case .hidden: mode = .visible
+        case .hover:
+            if isVisible { dismiss() } else { explicitPeek = true; dismissedHover = false }
+        }
+    }
+    public mutating func dismiss() {
+        if mode == .visible { mode = .hidden }
+        explicitPeek = false; dismissedHover = hovered
+    }
+}
+
 public enum NoticePriority: Int {
     case input = 0, unread, working
     public static func attention(_ status: NoticeStatus) -> Self {
