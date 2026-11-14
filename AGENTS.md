@@ -1,5 +1,7 @@
 # Working on Amplifier for Mac
 
+This codebase is yours: what it's for and how it's built are your call, and you'll keep building on it.
+
 Read docs/VISION.md, contracts/README.md, docs/compatibility.md and
 docs/contract-assessment.md before changing product behavior. Use
 docs/architecture.md and docs/ux-contract.md for implementation detail. Amplifier
