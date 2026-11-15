@@ -1,0 +1,97 @@
+{
+  "citations": [
+    {
+      "git_blob": "eec48e2af315a097a439dc7a32a89216bc9cf444",
+      "path": "README.md",
+      "ref": "573436c67cc69d6f9a3279700c75b9cb9bc49d97",
+      "sha256": "bff5d7027df5ed060bb313b812e7e3461da9becef1ea4945e9a8d2810b8297a1",
+      "url": "https://github.com/microsoft/amplifier-client-macos/blob/573436c67cc69d6f9a3279700c75b9cb9bc49d97/README.md"
+    },
+    {
+      "git_blob": "e0139954adb6085df0f73d6cd4ff82d9c0ac5d43",
+      "path": "docs/architecture.md",
+      "ref": "573436c67cc69d6f9a3279700c75b9cb9bc49d97",
+      "sha256": "51a13e7ffc9fdfde023ab7903bcdb47d178d1ad50fc31502d6df75c9aa47032c",
+      "url": "https://github.com/microsoft/amplifier-client-macos/blob/573436c67cc69d6f9a3279700c75b9cb9bc49d97/docs/architecture.md"
+    }
+  ],
+  "consumer_cta": {
+    "basis": "Existing approved README route; target release assets/availability not freshly audited in this plan.",
+    "label": "Download Amplifier for Mac",
+    "url": "https://github.com/microsoft/amplifier-client-macos/releases"
+  },
+  "display_name": "Amplifier for Mac",
+  "edges": [
+    {
+      "from": "self",
+      "relation": "contains",
+      "to": "core"
+    },
+    {
+      "from": "self",
+      "relation": "contains",
+      "to": "app"
+    },
+    {
+      "from": "app",
+      "relation": "contains",
+      "to": "tempo"
+    },
+    {
+      "from": "self",
+      "relation": "uses",
+      "to": "host"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "self",
+      "kind": "self",
+      "label": "Amplifier for Mac",
+      "repository": "microsoft/amplifier-client-macos"
+    },
+    {
+      "id": "core",
+      "kind": "internal",
+      "label": "ClientCore: pairing & reply intent"
+    },
+    {
+      "id": "app",
+      "kind": "internal",
+      "label": "AmplifierApp: native integration"
+    },
+    {
+      "id": "tempo",
+      "kind": "internal",
+      "label": "Tempo & notifications"
+    },
+    {
+      "id": "host",
+      "kind": "external",
+      "label": "Amplifier Unified host",
+      "repository": "microsoft/amplifier-unified"
+    }
+  ],
+  "notes": [
+    "Current early preview does not embed an agent runtime or a full workspace window.",
+    "Integrated workspace and device-control capability are future seams, not current map nodes.",
+    "Native client IDs, restricted pairing and private reply journals remain client-owned; canonical attention and work remain host-owned."
+  ],
+  "purpose": "Keep Amplifier close through menu-bar activity, quick chat, notifications and optional Tempo.",
+  "ref": "573436c67cc69d6f9a3279700c75b9cb9bc49d97",
+  "repository": "microsoft/amplifier-client-macos",
+  "roles": [
+    "Experience"
+  ],
+  "scope": "native client experience",
+  "start_cta": {
+    "basis": "Existing approved README route; target release assets/availability not freshly audited in this plan.",
+    "label": "Download Amplifier for Mac",
+    "url": "https://github.com/microsoft/amplifier-client-macos/releases"
+  },
+  "summary": "A native Mac companion experience connected to an existing Amplifier Unified host.",
+  "supports_roles": [
+    "Conversation"
+  ],
+  "visibility": "public"
+}
