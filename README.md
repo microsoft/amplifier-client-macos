@@ -99,6 +99,27 @@ menu-bar icons retain their [upstream attribution](Assets/README.md).
 [Tempo artwork provenance](Sources/AmplifierApp/Resources/ARTWORK.md) is included.
 Sparkle is a separately licensed dependency; its license ships in its framework.
 
+
+<!-- ecosystem-map:start -->
+## Where this fits
+
+A native Mac companion experience connected to an existing Amplifier Unified host.
+
+Roles: Experience. Supports: Conversation.
+
+![Ecosystem roles and component relationships](docs/ecosystem-map.svg)
+
+[Open the map](docs/ecosystem-map.svg) · [Product overview](https://microsoft.github.io/amplifier-constellation/projects/amplifier-client-macos/) · [Map guide](https://github.com/microsoft/amplifier-constellation/blob/main/docs/ecosystem-maps.md)
+
+<details>
+<summary>The five shared building blocks</summary>
+
+[![Experience, Conversation, Agent Instance, Connection and Tool](https://raw.githubusercontent.com/microsoft/amplifier-constellation/main/site/assets/art/building-blocks.png)](https://microsoft.github.io/amplifier-constellation/)
+
+</details>
+
+<!-- ecosystem-map:end -->
+
 ## Contributing
 
 > [!NOTE]
