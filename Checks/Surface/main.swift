@@ -21,6 +21,22 @@ MainActor.assumeIsolated {
     var actions: [String] = []
     surface.onChat = { actions.append("chat") }
     surface.onActivity = { _ in actions.append("activity") }
+    let menuDefaults = UserDefaults(suiteName: "AmplifierNoticeMenuCheck-" + UUID().uuidString)!
+    menuDefaults.set(true, forKey: "noticeListExpanded")
+    menuDefaults.set(245.0, forKey: "noticeListMaximum")
+    let quickMenu = NSMenu()
+    var selections = 0
+    let noticeMenu = TempoNoticeMenu(menu: quickMenu, defaults: menuDefaults) { selections += 1 }
+    for mode in [NoticeVisibility.hover, .hidden, .visible] {
+        let choice = quickMenu.items.first { $0.representedObject as? String == mode.rawValue }!
+        noticeMenu.selectMode(choice); noticeMenu.menuNeedsUpdate(quickMenu)
+        precondition(choice.state == .on && quickMenu.items.filter { $0.state == .on }.count == 1)
+        precondition(menuDefaults.string(forKey: "noticeVisibility") == mode.rawValue)
+        precondition(menuDefaults.bool(forKey: "noticeListExpanded") && menuDefaults.double(forKey: "noticeListMaximum") == 245)
+    }
+    menuDefaults.set("hover", forKey: "noticeVisibility")
+    noticeMenu.menuNeedsUpdate(quickMenu)
+    precondition(selections == 3 && quickMenu.items.first { $0.title == "On hover" }?.state == .on)
     let context = NSMenu()
     context.addItem(withTitle: "Settings…", action: nil, keyEquivalent: "")
     context.addItem(withTitle: "Hide Tempo", action: nil, keyEquivalent: "")

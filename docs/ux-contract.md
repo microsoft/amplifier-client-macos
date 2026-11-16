@@ -260,3 +260,9 @@ reveals or dismisses the current visit without changing the saved mode. An
 explicit non-pointer reveal remains reachable until dismissed or a hover visit
 ends. Escape hides the current hover visit until exit/reentry; in Visible it
 chooses Hidden. The header's Collapse/Expand controls only the view shape.
+
+Avatar context-menu notification choices are immediate, mutually exclusive and
+checked against the same preference as Settings: Always visible, On hover, Hidden.
+They are directly in the context menu for frequent use, without a submenu.
+Changing this preference preserves expansion and the saved height cap, never marks
+attention read, and does not hide the avatar or alter OS notification permission.

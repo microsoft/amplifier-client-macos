@@ -311,6 +311,33 @@ import ClientCore
     }
 }
 
+/// Checked, immediate choices shared with Settings; opening the menu never changes mode.
+@MainActor final class TempoNoticeMenu: NSObject, NSMenuDelegate {
+    private let defaults: UserDefaults
+    private let changed: () -> Void
+    private var choices: [NSMenuItem] = []
+    init(menu: NSMenu, defaults: UserDefaults = .standard, changed: @escaping () -> Void) {
+        self.defaults = defaults; self.changed = changed
+        super.init()
+        menu.delegate = self
+        menu.addItem(withTitle: "Notifications", action: nil, keyEquivalent: "").isEnabled = false
+        for mode in [NoticeVisibility.visible, .hover, .hidden] {
+            let title = mode == .visible ? "Always visible" : mode == .hover ? "On hover" : "Hidden"
+            let item = menu.addItem(withTitle: title, action: #selector(selectMode(_:)), keyEquivalent: "")
+            item.target = self; item.representedObject = mode.rawValue; choices.append(item)
+        }
+        menu.addItem(.separator()); menuNeedsUpdate(menu)
+    }
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        let selected = NoticeVisibility(rawValue: defaults.string(forKey: "noticeVisibility") ?? "") ?? .visible
+        for item in choices { item.state = item.representedObject as? String == selected.rawValue ? .on : .off }
+    }
+    @objc func selectMode(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, NoticeVisibility(rawValue: raw) != nil else { return }
+        defaults.set(raw, forKey: "noticeVisibility"); changed()
+    }
+}
+
 @MainActor private final class NoticeGroupHeader: NSView {
     init(name: String) {
         super.init(frame: .zero)
