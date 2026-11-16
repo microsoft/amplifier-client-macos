@@ -189,3 +189,12 @@ avatar-to-card traversal, drag hold, disabled monitoring, persisted expansion an
 scroll, and Settings control synchronization. Physical synthetic pointer checking
 and signed-candidate qualification are recorded separately; full VoiceOver and
 all Spaces/display arrangements are not inferred from source checks.
+
+
+## Generalized presentation candidate — November 16, 2026
+
+MP3/MR1/MR3 and shared DC1: use one host-owned observation path and shared exact
+state dismissals across approved clients. Qualification covers independent paged
+collections, restart/host identity, restricted-command denial, durable pending
+intent and stale state. Fixtures/builds are separate from signed release and
+physical adoption. No new browser/desktop execution authority is introduced.

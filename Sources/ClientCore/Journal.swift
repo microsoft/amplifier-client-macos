@@ -21,14 +21,14 @@ public struct Journal: Codable {
     /// First contact establishes a baseline, not a burst of historical alerts.
     /// Host process restarts do not reset identity. Device preferences do not
     /// acknowledge the host's shared unread state.
-    public mutating func observe(_ snapshot: CompanionSnapshot, endpoint: String,
+    public mutating func observe(_ snapshot: ObservationSnapshot, endpoint: String,
                                  enabled: Bool, pinnedOnly: Bool) -> [AttentionItem] {
         let scope = endpoint + "|" + snapshot.hostIdentity
         let previous = seen[scope].map(Set.init)
         let fresh = snapshot.items.filter { !(previous?.contains($0.key) ?? true) }
         let current = snapshot.items.map(\.key)
         seen[scope] = Array((current + (seen[scope] ?? []).filter { !current.contains($0) }).prefix(2048))
-        return enabled ? fresh.filter { !pinnedOnly || $0.pinned || follows($0.sessionId, endpoint: endpoint, hostIdentity: snapshot.hostIdentity) } : []
+        return enabled ? fresh.filter { $0.dismissal?.dismissed != true && (!pinnedOnly || $0.pinned || follows($0.sessionId, endpoint: endpoint, hostIdentity: snapshot.hostIdentity)) } : []
     }
 
     public mutating func enqueue(notificationID: String, endpoint: String, hostIdentity: String,

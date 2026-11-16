@@ -15,6 +15,7 @@ import ClientCore
         let sessionID: String
         var status: NoticeStatus = .unread
         var dismissalState: String = ""
+        var sharedDismissal: DismissalDescriptor? = nil
         var serviceID: String = ""
         var serviceName: String = ""
         var priority: NoticePriority = .unread
@@ -96,7 +97,7 @@ import ClientCore
             let remove = FirstClickButton(image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "Dismiss")!, target: self, action: #selector(dismissRow(_:)))
             remove.frame = NSRect(x: 290, y: 28, width: 24, height: 24); remove.isBordered = false
             remove.contentTintColor = .secondaryLabelColor; remove.tag = index
-            remove.toolTip = row.status == .working ? "Hide until activity changes" : "Hide from Tempo; keep unread"; remove.setAccessibilityLabel("Dismiss " + row.title + " from Tempo")
+            remove.toolTip = row.status == .working ? "Hide on all devices until activity changes" : "Hide on all devices; keep unread"; remove.setAccessibilityLabel("Dismiss " + row.title + " from Tempo")
             material.content.addSubview(remove)
         }
         material.onClick = { [weak button] in button?.performClick(nil) }

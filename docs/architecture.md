@@ -13,18 +13,21 @@ reply intent. `AmplifierApp` owns AppKit, UserNotifications, Keychain, login
 startup, Sparkle and the Tempo surfaces. The app does not embed an agent runtime.
 
 `HostClient` uses the host's current HTTP API. It attaches a native client,
-follows bounded companion/activity pagination and polls every five seconds.
+follows the advertised bounded sessions/attention/activity collections and polls
+every five seconds. It requires identity and shared-dismissal discovery; unsupported
+hosts remain unavailable without a second feed or credential escalation.
 Errors back off to sixty seconds; waking the Mac reconnects. Response previews
 are bounded and requested when needed, not by loading the whole history.
 
-The host owns canonical attention receipts and chat classification. Local
+The host owns canonical attention receipts, exact-state shared display dismissals
+and chat classification. Local
 notification delivery deduplication is not another unread-state authority.
 Commands capture their endpoint, durable host identity and chat before waiting.
 The journal retains original command IDs before sending; reconnect never replays
 old uncertain replies automatically. The host owns command admission and receipts.
 
 `companion-v1` grants compact reads, bounded previews, managed-chat creation and
-sending messages. It does not grant settings changes, approvals, arbitrary
+sending messages plus exact-state display dismissal. It does not grant settings changes, approvals, arbitrary
 filesystem access, device administration or local browser control. Native client
 IDs are separate from credentials and are bound to the approving device.
 
@@ -95,3 +98,18 @@ Visible detail reads rotate services and chats, with shared ceilings of five
 work-detail and ten response-detail reads. Main snapshot polling/backoff remains
 independent. This uses the existing companion-v1 API; there is no service proxy,
 credential replication, merged host history, server change, or execution authority.
+
+
+## Shared display dismissal
+
+`SharedDismissals` persists bounded pending intents in `dismissals.json` next to
+the reply journal, with owner-only permissions. A click hides only the host-issued
+identity/fingerprint and sends the captured host a stable `presentation.dismiss`
+command. Lost responses can retry that exact receipt after reconnect. A complete
+fresh observation retires confirmed or obsolete intent; a new response/action
+never inherits an older hide. Other devices learn the accepted receipt from the
+same generalized observations. This does not mark a chat read, resolve attention,
+or replay a chat command. Corrupt storage is preserved for recovery.
+
+Avatar/placement/visibility/sound/grouping remain local. Existing followed-chat
+exceptions remain local; host pins are the shared opt-in for agent-created chats.
