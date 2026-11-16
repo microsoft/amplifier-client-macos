@@ -21,7 +21,9 @@ MainActor.assumeIsolated {
     var actions: [String] = []
     surface.onChat = { actions.append("chat") }
     surface.onActivity = { _ in actions.append("activity") }
-    let menuDefaults = UserDefaults(suiteName: "AmplifierNoticeMenuCheck-" + UUID().uuidString)!
+    let menuSuite = "AmplifierNoticeMenuCheck-" + UUID().uuidString
+    let menuDefaults = UserDefaults(suiteName: menuSuite)!
+    defer { menuDefaults.removePersistentDomain(forName: menuSuite) }
     menuDefaults.set(true, forKey: "noticeListExpanded")
     menuDefaults.set(245.0, forKey: "noticeListMaximum")
     let quickMenu = NSMenu()
