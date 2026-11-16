@@ -1,4 +1,14 @@
-# Amplifier for Mac 0.1.8
+# Amplifier for Mac 0.1.9
+
+Change Tempo notification visibility directly from the avatar's right-click menu:
+**Always visible**, **On hover**, or **Hidden**. The checked choice stays in sync
+with Settings, and switching modes preserves the collapsed/expanded view and
+saved list height. The avatar continues to show activity in every mode.
+
+This changes only the notification bubbles around Tempo, not system notification
+permission, service connections, or read state. No server update is required.
+
+## Previous release: 0.1.8
 
 Choose when Tempo's notices appear in Settings → Tempo: **Visible**, **Hidden**,
 or **On hover**. The avatar keeps showing activity and attention in all three.

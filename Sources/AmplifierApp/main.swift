@@ -73,6 +73,7 @@ enum Keychain {
     private var positioning = false
     private let bubbles = TempoBubbles()
     private let noticeVisibility = TempoNoticeVisibility()
+    private var noticeOptions: TempoNoticeMenu?
     private var bubblesOpen = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -460,6 +461,10 @@ enum Keychain {
     }
     private func makeOptionsMenu() -> NSMenu {
         let menu = NSMenu()
+        noticeOptions = TempoNoticeMenu(menu: menu, defaults: defaults) { [weak self] in
+            self?.settings?.updateNoticeVisibility()
+            self?.preferenceChanged("noticeVisibility")
+        }
         let settings = menu.addItem(withTitle: "Settings…", action: #selector(showSettings), keyEquivalent: ",")
         settings.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: nil); settings.target = self
         let hide = menu.addItem(withTitle: "Hide Tempo", action: #selector(toggleTempo), keyEquivalent: "")
