@@ -3,10 +3,11 @@ import Foundation
 @MainActor public final class ServiceConnection {
     public var registration: RegisteredService
     public private(set) var client: HostClient?
-    public var latest: CompanionSnapshot?
+    public var latest: ObservationSnapshot?
     public private(set) var connected = false
     public private(set) var connecting = false
     public var status = "Not connected"
+    public var dismissalStatus: String?
     public var previews: [String: String] = [:]
     public var workLabels: [String: WorkPreview] = [:]
     public var previewAttempts = Set<String>()
@@ -14,7 +15,7 @@ import Foundation
     public var nextWorkDetail = 0
     private var poll: Task<Void, Never>?
     private var generation = UUID()
-    public var onSnapshot: ((ServiceConnection, CompanionSnapshot, HostClient) -> Void)?
+    public var onSnapshot: ((ServiceConnection, ObservationSnapshot, HostClient) -> Void)?
     public var onChange: (() -> Void)?
     public init(_ registration: RegisteredService) { self.registration = registration }
     public func owns(_ client: HostClient) -> Bool { self.client === client }

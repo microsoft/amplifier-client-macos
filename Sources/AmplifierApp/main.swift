@@ -45,6 +45,9 @@ enum Keychain {
     private let journalURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("Amplifier for Mac/journal.json")
     private var journal = Journal()
+    private var dismissals = SharedDismissals()
+    private var syncingDismissals = Set<String>()
+    private var dismissalURL: URL { journalURL.deletingLastPathComponent().appendingPathComponent("dismissals.json") }
     private var storageReady = false
     private var journalLock: Int32 = -1
     private var registry = ServiceRegistry()
@@ -86,7 +89,8 @@ enum Keychain {
             guard journalLock >= 0, flock(journalLock, LOCK_EX | LOCK_NB) == 0 else {
                 NSApp.terminate(nil); return
             }
-            journal = try Journal.load(from: journalURL); storageReady = true
+            journal = try Journal.load(from: journalURL)
+            dismissals = try SharedDismissals.load(from: dismissalURL); storageReady = true
         }
         catch { status = "Saved replies could not be read. Open Settings for details." }
         do {
@@ -206,7 +210,8 @@ enum Keychain {
             try await Task.detached { try Keychain.read(address) }.value
         })
     }
-    private func receive(_ value: CompanionSnapshot, client: HostClient, state: ServiceConnection) {
+    private func receive(_ value: ObservationSnapshot, client: HostClient, state: ServiceConnection) {
+        let receiptStates = value.items.compactMap(\.dismissal) + value.sessions.compactMap(\.dismissal)
         let value = value.visibleChats { id in
             self.journal.follows(id, endpoint: client.endpoint.url.absoluteString, hostIdentity: value.hostIdentity)
         }
@@ -218,6 +223,20 @@ enum Keychain {
             catch { state.stop(); state.status = error.localizedDescription; rebuildMenu(); return }
         }
         state.latest = value
+        var synced = dismissals
+        synced.reconcile(receiptStates, service: state.registration)
+        // Preserve only exact observed legacy attention intent. Local work labels
+        // cannot be guessed into a canonical activity fingerprint.
+        var legacy = defaults.dictionary(forKey: "dismissedTempoNotices") as? [String: String] ?? [:]
+        let prefix = state.registration.address + "|" + value.hostIdentity + "|"
+        do {
+            for item in value.items where legacy[prefix + item.key] == item.key {
+                if let descriptor = item.dismissal { _ = try synced.enqueue(descriptor, service: state.registration); legacy.removeValue(forKey: prefix + item.key) }
+            }
+            if synced.entries != dismissals.entries { try synced.save(to: dismissalURL); dismissals = synced }
+            defaults.set(legacy, forKey: "dismissedTempoNotices")
+        } catch { state.dismissalStatus = "Couldn't save dismissal synchronization" }
+        syncDismissals(state)
         let keys = Set(value.items.map(\.key))
         state.previews = state.previews.filter { keys.contains($0.key) }
         state.previewAttempts.formIntersection(keys)
@@ -243,7 +262,7 @@ enum Keychain {
         // Only visible running work requests bounded tool labels.
         requestVisibleDetails()
     }
-    private func deliver(_ alert: AttentionItem, snapshot: CompanionSnapshot, endpoint: Endpoint, preview: String?, serviceName: String) {
+    private func deliver(_ alert: AttentionItem, snapshot: ObservationSnapshot, endpoint: Endpoint, preview: String?, serviceName: String) {
         let content = UNMutableNotificationContent()
         content.title = registry.services.count > 1 ? "Amplifier · " + serviceName : "Amplifier"; content.subtitle = alert.title; content.body = preview ?? alert.summary
         content.categoryIdentifier = alert.allowsReply ? "response" : "attention"
@@ -388,7 +407,7 @@ enum Keychain {
         let services = menu.addItem(withTitle: "Services", action: nil, keyEquivalent: "")
         let serviceMenu = NSMenu(); serviceMenu.autoenablesItems = false
         for state in orderedConnections {
-            let row = serviceMenu.addItem(withTitle: serviceTitle(state) + " · " + state.status, action: #selector(selectService(_:)), keyEquivalent: "")
+            let row = serviceMenu.addItem(withTitle: serviceTitle(state) + " · " + state.status + (state.dismissalStatus.map { " · " + $0 } ?? ""), action: #selector(selectService(_:)), keyEquivalent: "")
             row.representedObject = state.registration.id; row.target = self
             row.state = state.registration.id == registry.preferredID ? .on : .off
             row.toolTip = state.registration.address + " · Use as the default for opening Amplifier and new chats"
@@ -527,7 +546,7 @@ enum Keychain {
         compose.onResize = { [weak self] in self?.positionBubbles() }
         composer = compose; surface.setComposing(true); compose.present(); positionBubbles()
     }
-    private func responsePreview(_ alert: AttentionItem, client: HostClient, snapshot: CompanionSnapshot, state: ServiceConnection) async -> String? {
+    private func responsePreview(_ alert: AttentionItem, client: HostClient, snapshot: ObservationSnapshot, state: ServiceConnection) async -> String? {
         guard alert.allowsReply else { return nil }
         if let cached = state.previews[alert.key] { return cached }
         guard state.previewAttempts.insert(alert.key).inserted else { return nil }
@@ -562,8 +581,6 @@ enum Keychain {
     /// Keep ongoing work visible without adding it to the attention count.
     private func activityRows() -> [TempoBubbles.Row] {
         var all: [TempoBubbles.Row] = []; bubbleTargets = [:]
-        var saved = defaults.dictionary(forKey: "dismissedTempoNotices") as? [String: String] ?? [:]
-        let original = saved
         for state in online {
             guard let latest = state.latest else { continue }
             let prefix = state.registration.address + "|" + latest.hostIdentity + "|"
@@ -572,32 +589,50 @@ enum Keychain {
                 let target = ServiceTarget(service: state.registration, hostIdentity: latest.hostIdentity, sessionID: id)
                 bubbleTargets[target.key] = target; return target.key
             }
-            let items = latest.items.filter { included($0, state: state) }
+            let items = latest.items.filter { $0.read != true && included($0, state: state) }
             var rows = items.map { item in
                 let session = latest.sessions.first { $0.id == item.sessionId }
                 let status = NoticeStatus.attention(kind: item.kind, working: session?.isWorking == true)
                 let detail = status == .working ? "Unread · " + (state.workLabels[item.sessionId]?.text ?? WorkPreview.fallback(status: session?.status ?? "working")) : state.previews[item.key] ?? item.summary
-                return TempoBubbles.Row(key: prefix + item.key, title: item.title, detail: label + detail, sessionID: route(item.sessionId), status: status, dismissalState: item.key,
+                return TempoBubbles.Row(key: prefix + item.key, title: item.title, detail: label + detail, sessionID: route(item.sessionId), status: status, dismissalState: item.key, sharedDismissal: item.dismissal,
                     serviceID: state.registration.id, serviceName: serviceTitle(state), priority: .attention(status))
             }
             let noticed = Set(items.map(\.sessionId))
             if defaults.bool(forKey: "workBubbles") {
                 rows += latest.sessions.filter { $0.isWorking && !noticed.contains($0.id) }.map {
                     TempoBubbles.Row(key: prefix + "work:" + $0.id, title: $0.title,
-                        detail: label + (state.workLabels[$0.id]?.text ?? WorkPreview.fallback(status: $0.status)),
+                        detail: label + ($0.display?.summary ?? state.workLabels[$0.id]?.text ?? WorkPreview.fallback(status: $0.status)),
                         sessionID: route($0.id), status: .working,
-                        dismissalState: "work|" + $0.status + "|" + (state.workLabels[$0.id]?.stateID ?? ""),
+                        dismissalState: $0.dismissal?.fingerprint ?? "", sharedDismissal: $0.dismissal,
                         serviceID: state.registration.id, serviceName: serviceTitle(state), priority: .working)
                 }
             }
-            let scoped = saved.filter { $0.key.hasPrefix(prefix) }
-            let kept = NoticeDismissal.reconcile(scoped, current: Dictionary(uniqueKeysWithValues: rows.map { ($0.key, $0.dismissalState) }))
-            saved = saved.filter { !$0.key.hasPrefix(prefix) }; saved.merge(kept) { _, new in new }
-            all += rows.filter { kept[$0.key] == nil }
+            all += rows.filter { row in
+                guard let descriptor = row.sharedDismissal else { return true }
+                return !dismissals.hidden(descriptor, service: state.registration)
+            }
         }
-        // Offline services retain their dismissal records until they can reconcile.
-        if saved != original { defaults.set(saved, forKey: "dismissedTempoNotices") }
         return NoticeOrdering.sorted(all, grouped: defaults.bool(forKey: "groupNoticesByService"), service: { $0.serviceID }, priority: { $0.priority })
+    }
+    private func syncDismissals(_ state: ServiceConnection) {
+        guard let client = state.client, state.connected, !syncingDismissals.contains(state.registration.id) else { return }
+        let pending = dismissals.entries.filter { $0.matches(state.registration) && !$0.accepted }.prefix(20)
+        guard !pending.isEmpty else { state.dismissalStatus = nil; return }
+        let id = state.registration.id
+        syncingDismissals.insert(id)
+        Task { [weak self, weak state] in
+            guard let self, let state else { return }
+            defer { self.syncingDismissals.remove(id); self.rebuildMenu(); self.refreshBubbles() }
+            do {
+                for entry in pending {
+                    guard state.owns(client), state.connected, entry.matches(state.registration) else { return }
+                    try await client.dismiss(entry)
+                    var next = self.dismissals; next.accepted(entry.requestID)
+                    try next.save(to: self.dismissalURL); self.dismissals = next
+                }
+                state.dismissalStatus = nil
+            } catch { if state.owns(client) { state.dismissalStatus = "Dismissals waiting to sync" } }
+        }
     }
     private func refreshBubbles() {
         noticeVisibility.synchronize(enabled: connected && panel.isVisible)
@@ -610,10 +645,14 @@ enum Keychain {
             self.open(target)
         }
         bubbles.dismiss = { [weak self] row in
-            guard let self, self.bubbleTargets[row.sessionID] != nil else { return }
-            var saved = self.defaults.dictionary(forKey: "dismissedTempoNotices") as? [String: String] ?? [:]
-            saved[row.key] = row.dismissalState
-            self.defaults.set(saved, forKey: "dismissedTempoNotices"); self.refreshBubbles()
+            guard let self, let descriptor = row.sharedDismissal,
+                  let state = self.connections[row.serviceID], state.connected else { return }
+            do {
+                var next = self.dismissals
+                _ = try next.enqueue(descriptor, service: state.registration)
+                try next.save(to: self.dismissalURL); self.dismissals = next
+                self.refreshBubbles(); self.syncDismissals(state)
+            } catch { state.dismissalStatus = "Couldn't save dismissal — try again"; self.rebuildMenu() }
         }
         let count = online.reduce(0) { count, state in count + (state.latest?.items.filter { included($0, state: state) }.count ?? 0) }
         // Re-sort on meaningful priority/group changes; rendering preserves the
@@ -759,7 +798,7 @@ enum Keychain {
     }
     private func updateSettingsServices() {
         settings?.updateServices(registry.services, preferredID: registry.preferredID,
-            statuses: Dictionary(uniqueKeysWithValues: orderedConnections.map { ($0.registration.id, $0.status) }),
+            statuses: Dictionary(uniqueKeysWithValues: orderedConnections.map { ($0.registration.id, $0.status + ($0.dismissalStatus.map { " · " + $0 } ?? "")) }),
             catalogError: registryReady ? nil : "Saved services could not be read. Existing credentials and replies are kept. Keep your settings for recovery before trying again.")
     }
     @objc private func showServiceSettings() { showSettings(); settings?.showConnection() }

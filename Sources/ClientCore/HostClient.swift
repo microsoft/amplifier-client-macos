@@ -31,6 +31,9 @@ public final class HostClient {
     private let clientID: String
     private let session: URLSession
     private let transportLock = NSLock()
+    private var observedHost: String?
+    private var observedInstance: String?
+    private var resources: [String: String] = [:]
     private var closed = false
     public init(endpoint: Endpoint, token: String, clientID: String,
                 configuration: URLSessionConfiguration = .ephemeral) {
@@ -82,8 +85,12 @@ public final class HostClient {
             }
         }, onCancel: { cancellation.cancel() })
     }
-    private func request(_ url: URL, body: [String: Any]? = nil) async throws -> Data {
+    private func request(_ url: URL, body: [String: Any]? = nil, deadline: Date? = nil) async throws -> Data {
         var request = URLRequest(url: url)
+        if let deadline {
+            try checkObservationBudget(deadline)
+            request.timeoutInterval = min(20, deadline.timeIntervalSinceNow)
+        }
         request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
         request.setValue(clientID, forHTTPHeaderField: "X-Amplifier-Client")
         request.setValue("delta-v1", forHTTPHeaderField: "X-Amplifier-State-Transport")
@@ -100,21 +107,51 @@ public final class HostClient {
                error["code"] as? String == "observation_pending" { throw CompanionError.observationPending }
             throw CompanionError.rejected(http.statusCode)
         }
+        guard data.count <= 2 * 1024 * 1024 else { throw CompanionError.incompatibleHost }
         return data
     }
     public func attach() async throws {
-        let data = try await request(endpoint.route("api", "clients", "attach"),
-            body: ["clientId": clientID, "kind": "native", "protocolVersion": 1])
-        let value = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        guard value?["protocolVersion"] as? Int == 1 else { throw CompanionError.incompatibleHost }
+        try await discover(deadline: nil)
     }
-    /// Finish bounded server scans within one poll; never publish a partial notification baseline.
-    public func snapshot() async throws -> CompanionSnapshot {
+    @discardableResult
+    private func discover(deadline: Date?, cache: Bool = true) async throws -> (host: String, instance: String) {
+        let data = try await request(endpoint.route("api", "clients", "attach"),
+            body: ["clientId": clientID, "kind": "native", "protocolVersion": 1, "includeState": false], deadline: deadline)
+        guard let value = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              value["protocolVersion"] as? Int == 1,
+              let host = value["hostIdentity"] as? String, !host.isEmpty,
+              let instance = value["hostInstanceId"] as? String, !instance.isEmpty,
+              let capabilities = value["capabilities"] as? [String: Any],
+              let observations = capabilities["observations"] as? [String: Any],
+              observations["version"] as? Int == 1,
+              observations["identity"] as? Bool == true,
+              let dismissals = observations["dismissals"] as? [String: Any],
+              dismissals["version"] as? Int == 1, dismissals["action"] as? String == "presentation.dismiss" else { throw CompanionError.incompatibleHost }
+        if let observedHost, observedHost != host { throw CompanionError.changedHost }
+        let expected = ["sessions": "/api/sessions?view=observation", "attention": "/api/attention", "activity": "/api/activity"]
+        for (key, path) in expected {
+            guard observations[key] as? String == path else { throw CompanionError.incompatibleHost }
+        }
+        if cache { observedHost = host; observedInstance = instance; resources = expected }
+        return (host, instance)
+    }
+    /// Each collection is coherent independently; never publish partial pages.
+    public func snapshot() async throws -> ObservationSnapshot {
         let deadline = Date().addingTimeInterval(45)
         for attempt in 0..<3 {
-            do { return try await completeSnapshot(deadline: deadline) }
-            catch CompanionError.rejected(404) { throw CompanionError.incompatibleHost }
-            catch CompanionError.rejected(409) where attempt < 2 { continue }
+            do {
+                if observedHost == nil || attempt > 0 { try await discover(deadline: deadline) }
+                let host = observedHost!, instance = observedInstance!
+                let sessions: [ChatSummary] = try await collection("sessions", deadline: deadline)
+                let notices: [ObservedNotice] = try await collection("attention", deadline: deadline)
+                let counts = try await activity(deadline: deadline)
+                let pins = Set(sessions.filter(\.pinned).map(\.id))
+                return ObservationSnapshot(protocolVersion: 1, hostIdentity: host, hostInstanceId: instance,
+                    workingCount: counts.executionCount, attentionCount: counts.attentionCount,
+                    sessions: sessions, items: notices.map { $0.item(pinned: pins.contains($0.target.sessionId)) },
+                    sessionsTruncated: false, itemsTruncated: false)
+            } catch CompanionError.rejected(404) { throw CompanionError.incompatibleHost }
+            catch CompanionError.rejected(let code) where [400, 409].contains(code) && attempt < 2 { continue }
         }
         throw CompanionError.observationPending
     }
@@ -122,72 +159,88 @@ public final class HostClient {
         try Task.checkCancellation()
         guard Date() < deadline else { throw CompanionError.observationPending }
     }
-    private func observationURL(_ path: String, cursors: [String: String]) -> URL {
-        var url = URLComponents(url: endpoint.route("api", path), resolvingAgainstBaseURL: false)!
-        url.queryItems = cursors.sorted { $0.key < $1.key }.map { URLQueryItem(name: $0.key, value: $0.value) }
-        return url.url!
+    private func observationURL(_ resource: String, cursor: String?) throws -> URL {
+        guard let path = resources[resource], let base = URL(string: path, relativeTo: endpoint.url)?.absoluteURL,
+              var parts = URLComponents(url: base, resolvingAgainstBaseURL: false) else { throw CompanionError.incompatibleHost }
+        var query = parts.queryItems ?? []
+        query.append(URLQueryItem(name: "scope", value: "roots"))
+        if resource != "activity" { query.append(URLQueryItem(name: "limit", value: "200")) }
+        if resource == "sessions" { query.append(URLQueryItem(name: "activity", value: "active-or-pinned")) }
+        if let cursor { query.append(URLQueryItem(name: "cursor", value: cursor)) }
+        parts.queryItems = query
+        return parts.url!
     }
-    private func finishActivity(deadline: Date) async throws {
-        var cursor: String?
-        var seen = Set<String>()
+    private func page(_ resource: String, cursor: String?, deadline: Date) async throws -> [String: Any] {
+        let data = try await request(observationURL(resource, cursor: cursor), deadline: deadline)
+        guard let value = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              value["nextCursor"] != nil, value["revision"] is String || value["revision"] is NSNumber else {
+            throw CompanionError.incompatibleHost
+        }
+        guard value["hostIdentity"] as? String == observedHost else { throw CompanionError.changedHost }
+        guard value["hostInstanceId"] as? String == observedInstance else { throw CompanionError.rejected(400) }
+        return value
+    }
+    private func continuation(_ value: [String: Any], seen: inout Set<String>) throws -> String? {
+        if value["nextCursor"] is NSNull { return nil }
+        guard let next = value["nextCursor"] as? String, !next.isEmpty, next.utf8.count <= 8192,
+              seen.insert(next).inserted else { throw CompanionError.observationPending }
+        return next
+    }
+    private func checkRevision(_ value: [String: Any], previous: inout Data?) throws {
+        let current = try JSONSerialization.data(withJSONObject: value["revision"]!, options: [.fragmentsAllowed, .sortedKeys])
+        if let previous, previous != current { throw CompanionError.incompatibleHost }
+        previous = current
+    }
+    private func collection<T: Decodable & Identifiable>(_ resource: String, deadline: Date) async throws -> [T] where T.ID == String {
+        var result: [T] = [], cursor: String?, revision: Data?
+        var seen = Set<String>(), ids = Set<String>()
         for _ in 0..<256 {
-            try checkObservationBudget(deadline)
-            let data = try await request(observationURL("activity", cursors: cursor.map { ["cursor": $0] } ?? [:]))
-            guard let value = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                throw CompanionError.incompatibleHost
+            let value = try await page(resource, cursor: cursor, deadline: deadline)
+            try checkRevision(value, previous: &revision)
+            guard let items = value["items"] as? [[String: Any]], items.count <= 200 else { throw CompanionError.incompatibleHost }
+            let decoded = try JSONDecoder().decode([T].self, from: JSONSerialization.data(withJSONObject: items))
+            for row in decoded {
+                guard !row.id.isEmpty, ids.insert(row.id).inserted else { throw CompanionError.incompatibleHost }
             }
-            if value["status"] as? String == "ready" { return }
-            guard value["status"] as? String == "collecting",
-                  let next = value["nextCursor"] as? String, !next.isEmpty,
-                  seen.insert(next).inserted else { throw CompanionError.observationPending }
-            cursor = next
+            if resource == "sessions", decoded.contains(where: { ($0 as? ChatSummary).map { $0.activity == nil || $0.isWorking && ($0.dismissal == nil || $0.dismissal!.id.isEmpty || $0.dismissal!.fingerprint.isEmpty) } ?? true }) { throw CompanionError.incompatibleHost }
+            if resource == "attention", decoded.contains(where: { ($0 as? ObservedNotice).map { $0.target.type != "session" || $0.target.sessionId.isEmpty || $0.fingerprint.isEmpty || $0.dismissal.id.isEmpty || $0.dismissal.fingerprint.isEmpty } ?? false }) { throw CompanionError.incompatibleHost }
+            result += decoded
+            cursor = try continuation(value, seen: &seen)
+            if cursor == nil { return result }
         }
         throw CompanionError.observationPending
     }
-    private func observationPage(_ cursors: [String: String], deadline: Date) async throws -> CompanionSnapshot {
-        for _ in 0..<3 {
-            try checkObservationBudget(deadline)
-            do {
-                let data = try await request(observationURL("companion", cursors: cursors))
-                let value = try JSONDecoder().decode(CompanionSnapshot.self, from: data)
-                guard value.protocolVersion == 1 else { throw CompanionError.incompatibleHost }
-                return value
-            } catch CompanionError.observationPending {
-                // A large/changing catalog cannot finish if every partial scan waits for the next poll.
-                // Follow the immutable activity traversal before retrying this read, never a command.
-                try await finishActivity(deadline: deadline)
-            }
-        }
-        throw CompanionError.observationPending
-    }
-    private func completeSnapshot(deadline: Date) async throws -> CompanionSnapshot {
-        var result = try await observationPage([:], deadline: deadline)
-        var sessionCursor = result.sessionsNextCursor
-        var itemCursor = result.itemsNextCursor
-        var cursors: [String: String] = [:]
-        var seen = Set<String>()
+    private func activity(deadline: Date) async throws -> ActivityCounts {
+        var cursor: String?, revision: Data?, seen = Set<String>()
         for _ in 0..<256 {
-            if sessionCursor == nil && itemCursor == nil { return result }
-            if let sessionCursor { cursors["sessionsCursor"] = sessionCursor }
-            if let itemCursor { cursors["itemsCursor"] = itemCursor }
-            // Retain a finished side's terminal cursor while the other side continues.
-            // The server replays that terminal page instead of allocating another traversal.
-            let key = cursors.sorted { $0.key < $1.key }.map { $0.key + "=" + $0.value }.joined(separator: "&")
-            guard seen.insert(key).inserted else { throw CompanionError.observationPending }
-            let page = try await observationPage(cursors, deadline: deadline)
-            guard page.hostIdentity == result.hostIdentity, page.hostInstanceId == result.hostInstanceId else {
-                throw CompanionError.changedHost
+            let value = try await page("activity", cursor: cursor, deadline: deadline)
+            try checkRevision(value, previous: &revision)
+            cursor = try continuation(value, seen: &seen)
+            if value["status"] as? String == "ready", cursor == nil {
+                let counts = try JSONDecoder().decode(ActivityCounts.self, from: JSONSerialization.data(withJSONObject: value))
+                guard counts.valid else { throw CompanionError.incompatibleHost }
+                return counts
             }
-            if sessionCursor != nil { result.sessions.append(contentsOf: page.sessions); sessionCursor = page.sessionsNextCursor; result.sessionsTruncated = page.sessionsTruncated }
-            if itemCursor != nil { result.items.append(contentsOf: page.items); itemCursor = page.itemsNextCursor; result.itemsTruncated = page.itemsTruncated }
-            result.sessionsNextCursor = sessionCursor; result.itemsNextCursor = itemCursor
+            guard value["status"] as? String == "collecting", cursor != nil else { throw CompanionError.incompatibleHost }
         }
         throw CompanionError.observationPending
+    }
+    public func dismiss(_ intent: DismissalIntent) async throws {
+        guard intent.endpoint == endpoint.url.absoluteString else { throw CompanionError.changedHost }
+        let deadline = Date().addingTimeInterval(30)
+        let identity = try await discover(deadline: deadline, cache: false)
+        guard identity.host == intent.hostIdentity else { throw CompanionError.changedHost }
+        let data = try await request(endpoint.route("api", "actions"), body: ["id": intent.requestID,
+            "action": "presentation.dismiss", "args": ["items": [["id": intent.id, "fingerprint": intent.fingerprint]]]], deadline: deadline)
+        guard let value = try JSONSerialization.jsonObject(with: data) as? [String: Any], value["accepted"] as? Bool == true else {
+            throw CompanionError.uncertain
+        }
     }
     public func send(_ reply: PendingReply) async throws {
         guard reply.endpoint == endpoint.url.absoluteString else { throw CompanionError.changedHost }
         // Verify durable host identity even if the address was reassigned.
-        guard try await snapshot().hostIdentity == reply.hostIdentity else { throw CompanionError.changedHost }
+        let identity = try await discover(deadline: Date().addingTimeInterval(20), cache: false)
+        guard identity.host == reply.hostIdentity else { throw CompanionError.changedHost }
         if let command = reply.createCommandID {
             let created = try await request(endpoint.route("api", "actions"), body: [
                 "id": command, "action": "session.create", "args": [
@@ -227,4 +280,20 @@ public final class HostClient {
         WorkPreview.from(nodes: try await details(sessionID: sessionID, part: "nodes"))
     }
 
+}
+
+private struct ObservedNotice: Decodable, Identifiable {
+    struct Target: Decodable { let type: String; let sessionId: String }
+    let id: String; let fingerprint: String; let kind: String; let target: Target
+    let requiresAction: Bool; let read: Bool; let title: String; let summary: String
+    let agentCreated: Bool?; let pinned: Bool?; let dismissal: DismissalDescriptor
+    func item(pinned selected: Bool) -> AttentionItem {
+        AttentionItem(id: id, fingerprint: fingerprint, sessionId: target.sessionId,
+            title: title, kind: kind, summary: summary, pinned: pinned ?? selected, agentCreated: agentCreated, dismissal: dismissal, requiresAction: requiresAction, read: read)
+    }
+}
+private struct ActivityCounts: Decodable {
+    let executionCount: Int; let preparingCount: Int; let loadingCount: Int
+    let attentionCount: Int; let requiresActionCount: Int
+    var valid: Bool { [executionCount, preparingCount, loadingCount, attentionCount, requiresActionCount].allSatisfy { $0 >= 0 } }
 }

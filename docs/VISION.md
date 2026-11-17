@@ -114,3 +114,15 @@ keeps its own platform vision, contracts and qualification evidence.
 | --- | --- | --- |
 | 2026-10-20 | Adopt Amplifier for Mac identity, workspace/quick interaction/optional Tempo direction. | Product-owner approval of public-project recommendations. |
 | 2026-10-20 | Name document state, link stable contracts/evidence, add observable targets and Windows boundary. | Product-owner approval of methodology alignment; no new runtime or release claim. |
+
+## Shared observation and dismissal direction (2026-11-16)
+
+User-approved direction: consume one generalized, permission-aware observation
+contract and retire the temporary companion adapter after coordinated cutover.
+Dismissal belongs to the owning account on each service and is shared across its
+approved clients. Dismissing an observed update hides that exact state everywhere;
+a subsequent response or activity incarnation can appear again. Dismissal does
+not acknowledge unread content, answer questions, approve work or stop execution.
+Display preferences (avatar, size, grouping, visibility and placement) remain local.
+Independent services remain independent authorities; this is not account federation.
+Implementation, qualification and deployed cutover are tracked separately.

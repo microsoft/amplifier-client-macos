@@ -84,3 +84,24 @@ API and its own explicitly approved credential. Unsupported or offline services
 remain independently unavailable. Browser execution enrollment is separate and
 unchanged. Windows can follow the same shared destination/authority promises but
 needs its own registration UI, secure storage and platform qualification.
+
+
+## Generalized observation cutover candidate (2026-11-16)
+
+Reviewed accepted Unified baseline `46f0fe683b6bf87914fcda170e0ef3f6bd26f67f`.
+The coordinated service successor adds `observations.identity:true` and
+`observations.dismissals:{version:1,action:"presentation.dismiss"}`, generic read
+permission for existing restricted credentials and durable shared receipts.
+This client requires those explicit capabilities. It does not use `/api/companion`
+or retain a legacy feed fallback. The historical 0.1.0 compatibility table above
+is release evidence, not the current candidate wire requirement. The oldest
+released service supporting this successor is not yet qualified.
+
+The retained `companion-v1` name describes a credential scope, not an adapter.
+Existing Keychain credentials, host registrations, private layout preferences and
+uncertain reply intents remain intact. Unsupported hosts independently show an
+update requirement. Service and native candidates must be qualified and adopted
+before the service removes its temporary old-client adapter. No actual live
+adoption is claimed by this source change.
+
+Candidate shared wire owner: [presentation contract](https://github.com/microsoft/amplifier-unified/blob/e7bc197dd/docs/clients/presentation.md) at `e7bc197dd`. This is a coordinated candidate, not an accepted service release.

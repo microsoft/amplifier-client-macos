@@ -1,11 +1,21 @@
 import Foundation
 
+/// Opaque host-owned state identity, never a client-generated activity label.
+public struct DismissalDescriptor: Codable, Equatable {
+    public let id: String
+    public let fingerprint: String
+    public let dismissed: Bool
+    public init(id: String, fingerprint: String, dismissed: Bool) {
+        self.id = id; self.fingerprint = fingerprint; self.dismissed = dismissed
+    }
+}
+
 public enum CompanionError: Error, LocalizedError {
     case invalidEndpoint, incompatibleHost, rejected(Int), uncertain, changedHost, changedService, observationPending
     public var errorDescription: String? {
         switch self {
         case .invalidEndpoint: return "Use an HTTPS host address, or HTTP on 127.0.0.1 or localhost. Omit paths, passwords, and query parameters."
-        case .incompatibleHost: return "This host does not support Amplifier for Mac yet. Update Unified on that host."
+        case .incompatibleHost: return "Update Unified on this service to support shared updates across your devices."
         case .rejected(let code): return "The host refused this request (HTTP \(code)). Check your connection and token."
         case .observationPending: return "Amplifier is collecting activity. Tempo will reconnect shortly."
         case .uncertain: return "Delivery is unconfirmed. Your reply is saved. Check the chat before choosing Retry."
@@ -44,8 +54,11 @@ public struct ChatSummary: Decodable, Identifiable {
     public let pinned: Bool
     public let agentCreated: Bool?
     public let activity: ActivityFlags?
+    public var dismissal: DismissalDescriptor? = nil
+    public var display: DisplayHint? = nil
     public var isWorking: Bool { activity.map { $0.execution || $0.preparing } ?? ["working", "running", "stopping", "starting"].contains(status) }
 }
+public struct DisplayHint: Decodable { public let summary: String }
 public struct ActivityFlags: Decodable {
     public let execution: Bool
     public let preparing: Bool
@@ -60,11 +73,14 @@ public struct AttentionItem: Codable, Identifiable {
     public let summary: String
     public let pinned: Bool
     public let agentCreated: Bool?
+    public var dismissal: DismissalDescriptor? = nil
+    public var requiresAction: Bool? = nil
+    public var read: Bool? = nil
     public var key: String { id + ":" + fingerprint }
     public var isError: Bool { ["session", "session-error"].contains(kind) }
     public var allowsReply: Bool { kind == "completion" }
 }
-public struct CompanionSnapshot: Decodable {
+public struct ObservationSnapshot: Decodable {
     public let protocolVersion: Int
     public let hostIdentity: String
     public let hostInstanceId: String
@@ -76,7 +92,7 @@ public struct CompanionSnapshot: Decodable {
     public var itemsTruncated: Bool
     public var sessionsNextCursor: String?
     public var itemsNextCursor: String?
-    public func visibleChats(follows: (String) -> Bool) -> CompanionSnapshot {
+    public func visibleChats(follows: (String) -> Bool) -> ObservationSnapshot {
         var result = self
         result.sessions = sessions.filter { $0.agentCreated != true || $0.pinned || follows($0.id) }
         result.items = items.filter { $0.agentCreated != true || $0.pinned || follows($0.sessionId) }

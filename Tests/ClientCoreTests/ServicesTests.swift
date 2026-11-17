@@ -55,11 +55,11 @@ final class ServicesTests: XCTestCase {
     }
     func testAttentionAndRepliesWithCollidingIDsRemainIndependent() throws {
         let data = snapshotData(host: "cloned-host", fingerprint: "one")
-        var snapshot = try JSONDecoder().decode(CompanionSnapshot.self, from: data)
+        var snapshot = try JSONDecoder().decode(ObservationSnapshot.self, from: data)
         var journal = Journal()
         XCTAssertTrue(journal.observe(snapshot, endpoint: "https://a.example", enabled: true, pinnedOnly: false).isEmpty)
         XCTAssertTrue(journal.observe(snapshot, endpoint: "https://b.example", enabled: true, pinnedOnly: false).isEmpty)
-        snapshot = try JSONDecoder().decode(CompanionSnapshot.self, from: snapshotData(host: "cloned-host", fingerprint: "two"))
+        snapshot = try JSONDecoder().decode(ObservationSnapshot.self, from: snapshotData(host: "cloned-host", fingerprint: "two"))
         XCTAssertEqual(journal.observe(snapshot, endpoint: "https://a.example", enabled: true, pinnedOnly: false).count, 1)
         XCTAssertEqual(journal.observe(snapshot, endpoint: "https://b.example", enabled: true, pinnedOnly: false).count, 1)
         for endpoint in ["https://a.example", "https://b.example"] {
@@ -72,7 +72,7 @@ final class ServicesTests: XCTestCase {
     func testStoppedTransportCannotStartAnotherReadButOtherServiceStillWorks() async throws {
         ServicesURLProtocol.handler = { request in
             XCTAssertEqual(request.url?.host, "b.example", "Stopped credential must not issue further requests")
-            return (200, Data("{\"protocolVersion\":1}".utf8))
+            return (200, self.genericData(request, host: "host-b"))
         }
         defer { ServicesURLProtocol.handler = nil }
         func client(_ address: String) throws -> HostClient {
@@ -109,11 +109,10 @@ final class ServicesTests: XCTestCase {
         let a = ServiceConnection(try RegisteredService(address: "https://a.example"))
         let b = ServiceConnection(try RegisteredService(address: "https://b.example"))
         let healthy = expectation(description: "healthy snapshot"), failed = expectation(description: "offline service")
-        let payload = snapshotData(host: "host-b")
         ServicesURLProtocol.handler = { request in
             XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer token-" + request.url!.host!)
             if request.url?.host == "a.example" { return (503, Data()) }
-            return (200, request.url!.path.hasSuffix("attach") ? Data("{\"protocolVersion\":1}".utf8) : payload)
+            return (200, self.genericData(request, host: "host-b"))
         }
         defer { a.stop(); b.stop(); ServicesURLProtocol.handler = nil }
         a.onChange = { if a.status.contains("503") { failed.fulfill() } }
@@ -144,8 +143,7 @@ final class ServicesTests: XCTestCase {
         await Task.yield(); XCTAssertNil(state.client); XCTAssertFalse(state.connected)
         state.registration.hostIdentity = "original"
         let rejected = expectation(description: "different durable host refused")
-        let payload = snapshotData(host: "replacement")
-        ServicesURLProtocol.handler = { request in (200, request.url!.path.hasSuffix("attach") ? Data("{\"protocolVersion\":1}".utf8) : payload) }
+        ServicesURLProtocol.handler = { request in (200, self.genericData(request, host: "replacement")) }
         defer { state.stop(); ServicesURLProtocol.handler = nil }
         state.onSnapshot = { _, _, _ in XCTFail("Replacement snapshot published") }
         state.onChange = { if state.status == CompanionError.changedService.localizedDescription { rejected.fulfill() } }
@@ -155,6 +153,18 @@ final class ServicesTests: XCTestCase {
         })
         await fulfillment(of: [rejected], timeout: 3)
         XCTAssertFalse(state.connected); XCTAssertNil(state.latest)
+    }
+    private func genericData(_ request: URLRequest, host: String) -> Data {
+        let value: [String: Any]
+        switch request.url!.path {
+        case "/api/clients/attach":
+            value = ["protocolVersion": 1, "hostIdentity": host, "hostInstanceId": "process", "capabilities": ["observations": ["version": 1, "sessions": "/api/sessions?view=observation", "attention": "/api/attention", "activity": "/api/activity", "identity": true, "dismissals": ["version": 1, "action": "presentation.dismiss"]]]]
+        case "/api/activity":
+            value = ["revision": "a1", "status": "ready", "nextCursor": NSNull(), "executionCount": 0, "preparingCount": 0, "loadingCount": 0, "attentionCount": 0, "requiresActionCount": 0]
+        default:
+            value = ["revision": "r1", "nextCursor": NSNull(), "items": []]
+        }
+        return try! JSONSerialization.data(withJSONObject: value.merging(["hostIdentity": host, "hostInstanceId": "process"]) { old, _ in old })
     }
     private func snapshotData(host: String, fingerprint: String = "one") -> Data {
         try! JSONSerialization.data(withJSONObject: ["protocolVersion": 1, "hostIdentity": host, "hostInstanceId": "process",

@@ -51,7 +51,7 @@ Amplifier.app
    Combine current attention and work across registered services, with distinct
    service labels and explicit unavailable-service status. Never count stale
    observations as current or equate a partial outage with no remaining work.
-   A local dismissal does not acknowledge host attention. Dismissed work stays
+   A shared exact-state dismissal does not acknowledge host attention. Dismissed work stays
    hidden until its known execution state changes, not on each progress refresh.
    Broken: working alone increments attention or a palette disguises an error.
    Affected: people deciding what needs review.

@@ -95,6 +95,6 @@ public struct ServiceTarget: Equatable, Hashable {
 extension AttentionItem {
     public func scoped(to scope: String) -> AttentionItem {
         AttentionItem(id: scope + ":" + id, fingerprint: fingerprint, sessionId: sessionId,
-                      title: title, kind: kind, summary: summary, pinned: pinned, agentCreated: agentCreated)
+                      title: title, kind: kind, summary: summary, pinned: pinned, agentCreated: agentCreated, dismissal: dismissal, requiresAction: requiresAction, read: read)
     }
 }

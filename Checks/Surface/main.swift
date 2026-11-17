@@ -506,7 +506,7 @@ MainActor.assumeIsolated {
     var groupRoute = "", groupDismiss = ""
     grouped.openChat = { groupRoute = $0 }; grouped.dismiss = { groupDismiss = $0.key }
     (sameCard.content.subviews.first as! NSButton).performClick(nil)
-    sameCard.content.subviews.compactMap { $0 as? NSButton }.first { $0.toolTip == "Hide from Tempo; keep unread" }!.performClick(nil)
+    sameCard.content.subviews.compactMap { $0 as? NSButton }.first { $0.toolTip == "Hide on all devices; keep unread" }!.performClick(nil)
     precondition(groupRoute == "route-\(markedIndex)" && groupDismiss == "group-\(markedIndex)", "Headings never offset chat or dismiss targets")
     grouped.close()
     print("PASS: optional group headings, fit-all content size, scroll anchor and card action identity")

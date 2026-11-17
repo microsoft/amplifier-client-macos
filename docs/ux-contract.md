@@ -62,12 +62,16 @@ an update and ongoing work gets one update card; after review, ongoing work may
 remain without an attention badge.
 
 Each expanded card has a direct dismiss control. Dismissal hides that card from
-Tempo locally, preserving the host's unread state and canonical attention count.
+all connected clients of the same owning account/service, preserving the host's
+unread state and canonical attention count.
 An unchanged attention fingerprint stays hidden; a new fingerprint can return.
 Working cards stay hidden for the same execution node/phase and return for a new
 action or lifecycle state. Progress text alone does not resurrect a card, nor
 does temporarily missing detail after a restart. Stop/disappearance retires the
-matching local dismissal. These records are scoped to the selected host identity.
+matching host-owned dismissal. These records are shared across approved devices
+of that account/service; independent services are not federated. Display preferences
+remain local. Failed synchronization must be visible and cannot claim cross-device
+completion.
 
 Match sidebar symbol meanings with native icons: open progress ring for work,
 dot for unread, question circle for a decision, pause circle for blocked work,

@@ -26,12 +26,12 @@ final class ClientCoreTests: XCTestCase {
         XCTAssertNil(WebAppLaunch.browserID(for: "com.microsoft.edgemac.app.other", appID: id))
         XCTAssertNil(WebAppLaunch.browserID(for: "com.microsoft.edgemac.app." + id, appID: "--argument"))
     }
-    func snapshot(_ fingerprint: String = "one", host: String = "host", pinned: Bool = true) throws -> CompanionSnapshot {
+    func snapshot(_ fingerprint: String = "one", host: String = "host", pinned: Bool = true) throws -> ObservationSnapshot {
         let value: [String: Any] = ["protocolVersion": 1, "hostIdentity": host, "hostInstanceId": UUID().uuidString,
             "workingCount": 1, "attentionCount": 1, "sessions": [], "sessionsTruncated": false, "itemsTruncated": false,
             "items": [["id": "completion:chat-A", "fingerprint": fingerprint, "sessionId": "chat-A", "title": "A",
                        "kind": "completion", "summary": "Response ready", "pinned": pinned]]]
-        return try JSONDecoder().decode(CompanionSnapshot.self, from: JSONSerialization.data(withJSONObject: value))
+        return try JSONDecoder().decode(ObservationSnapshot.self, from: JSONSerialization.data(withJSONObject: value))
     }
     func testOlderHostKeepsPairingUnsupportedInsteadOfRequestingCredentials() async throws {
         StubURLProtocol.handler = { _ in (401, Data()) }
@@ -86,7 +86,7 @@ final class ClientCoreTests: XCTestCase {
             let identity = try XCTUnwrap(request.value(forHTTPHeaderField: "X-Amplifier-Client"))
             identities.append(identity)
             XCTAssertLessThanOrEqual(identity.count, 100)
-            return (200, Data("{\"protocolVersion\":1}".utf8))
+            return (200, try self.discoveryFixture())
         }
         defer { StubURLProtocol.handler = nil }
         for device in ["a", "a", "b"] {
@@ -174,9 +174,9 @@ final class ClientCoreTests: XCTestCase {
         var requests = 0
         StubURLProtocol.handler = { request in
             requests += 1
-            XCTAssertEqual(request.httpMethod, "GET")
-            XCTAssertEqual(request.url!.path, "/api/companion")
-            return (200, data)
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(request.url!.path, "/api/clients/attach")
+            return (200, try self.discoveryFixture(host: "replacement"))
         }
         defer { StubURLProtocol.handler = nil }
         let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [StubURLProtocol.self]
@@ -194,7 +194,7 @@ final class ClientCoreTests: XCTestCase {
         StubURLProtocol.handler = { request in
             XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer private-token")
             XCTAssertEqual(request.value(forHTTPHeaderField: "X-Amplifier-Client"), ledger.clientID)
-            if request.url!.path == "/api/companion" { return (200, data) }
+            if request.url!.path == "/api/clients/attach" { return (200, try self.discoveryFixture()) }
             XCTAssertEqual(request.url!.path, "/api/sessions/chat-A/commands")
             let body: Data
             if let bytes = request.httpBody { body = bytes }
@@ -256,7 +256,7 @@ final class ClientCoreTests: XCTestCase {
         let data = try JSONSerialization.data(withJSONObject: ["protocolVersion": 1, "hostIdentity": "host", "hostInstanceId": "instance", "workingCount": 0, "attentionCount": 0, "sessions": [], "items": [], "sessionsTruncated": false, "itemsTruncated": false])
         var commands: [[String: Any]] = []
         StubURLProtocol.handler = { request in
-            if request.url!.path == "/api/companion" { return (200, data) }
+            if request.url!.path == "/api/clients/attach" { return (200, try self.discoveryFixture()) }
             let body = try self.body(request); commands.append(body)
             if request.url!.path == "/api/actions" {
                 let args = body["args"] as! [String: Any]
@@ -284,13 +284,13 @@ final class ClientCoreTests: XCTestCase {
         var paths: [String] = []
         StubURLProtocol.handler = { request in
             paths.append(request.url!.path)
-            return (200, request.url!.path == "/api/companion" ? data : Data("{\"accepted\":true,\"sessionId\":\"wrong\"}".utf8))
+            return (200, request.url!.path == "/api/clients/attach" ? try self.discoveryFixture() : Data("{\"accepted\":true,\"sessionId\":\"wrong\"}".utf8))
         }
         defer { StubURLProtocol.handler = nil }
         let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [StubURLProtocol.self]
         let client = HostClient(endpoint: try Endpoint("https://host"), token: "test", clientID: "test", configuration: config)
         do { try await client.send(reply); XCTFail("Creation identity was not verified") } catch CompanionError.uncertain { }
-        XCTAssertEqual(paths, ["/api/companion", "/api/actions"])
+        XCTAssertEqual(paths, ["/api/clients/attach", "/api/actions"])
     }
     func testResponsePreviewDoesNotReuseAnAnswerBeforeLatestUserMessage() async throws {
         var rows: [[String: String]] = [["role": "assistant", "text": "old answer"], ["role": "user", "text": "new question"]]
@@ -319,121 +319,164 @@ final class ClientCoreTests: XCTestCase {
             "kind":"completion", "summary":"Ready", "pinned":row["pinned"]!, "agentCreated":row["agentCreated"] ?? false] }
         let data = try JSONSerialization.data(withJSONObject:["protocolVersion":1,"hostIdentity":"host","hostInstanceId":"instance",
             "workingCount":20,"attentionCount":20,"sessions":sessions,"items":items,"sessionsTruncated":false,"itemsTruncated":false])
-        let visible = try JSONDecoder().decode(CompanionSnapshot.self, from:data).visibleChats { $0 == "followed-agent" }
+        let visible = try JSONDecoder().decode(ObservationSnapshot.self, from:data).visibleChats { $0 == "followed-agent" }
         XCTAssertFalse(visible.sessions.contains { $0.id == "agent" })
         XCTAssertFalse(visible.items.contains { $0.sessionId == "agent" })
         XCTAssertEqual(Set(visible.sessions.filter(\.isWorking).map(\.id)), ["pinned-agent","followed-agent","preparing"])
         XCTAssertEqual(visible.workingCount,3)
     }
-    private func observationFixture(session: String = "A", item: String = "A", sessionCursor: String? = nil,
-                                    itemCursor: String? = nil, host: String = "host") throws -> Data {
-        var value: [String: Any] = ["protocolVersion": 1, "hostIdentity": host, "hostInstanceId": "instance",
-            "workingCount": 1, "attentionCount": 3,
-            "sessions": [["id": session, "title": session, "status": "ready", "pinned": true]],
-            "items": [["id": item, "fingerprint": "one", "sessionId": item, "title": item,
-                       "kind": "completion", "summary": "Response ready", "pinned": true]],
-            "sessionsTruncated": sessionCursor != nil, "itemsTruncated": itemCursor != nil]
-        value["sessionsNextCursor"] = sessionCursor; value["itemsNextCursor"] = itemCursor
+    func testDismissalRetryUsesExactIdentityAndReplacementCannotReceiveWrite() async throws {
+        let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [StubURLProtocol.self]
+        var service = try RegisteredService(address: "https://host"); service.hostIdentity = "host"
+        var journal = SharedDismissals()
+        let intent = try journal.enqueue(DismissalDescriptor(id: "update", fingerprint: "state", dismissed: false), service: service)
+        var writes = 0, replacement = false
+        StubURLProtocol.handler = { request in
+            if request.url!.path == "/api/clients/attach" { return (200, try self.discoveryFixture(host: replacement ? "other" : "host")) }
+            XCTAssertEqual(request.url!.path, "/api/actions"); writes += 1
+            let body = try self.body(request)
+            XCTAssertEqual(body["id"] as? String, intent.requestID)
+            XCTAssertEqual(body["action"] as? String, "presentation.dismiss")
+            let args = try XCTUnwrap(body["args"] as? [String: Any])
+            XCTAssertEqual(args["items"] as? [[String: String]], [["id": "update", "fingerprint": "state"]])
+            return writes == 1 ? (503, Data()) : (200, Data("{\"accepted\":true}".utf8))
+        }
+        defer { StubURLProtocol.handler = nil }
+        let client = HostClient(endpoint: service.endpoint, token: "test", clientID: "test", configuration: config)
+        do { try await client.dismiss(intent); XCTFail("Expected unavailable service") } catch CompanionError.rejected(503) { }
+        XCTAssertEqual(writes, 1)
+        try await client.dismiss(intent); XCTAssertEqual(writes, 2)
+        replacement = true
+        do { try await client.dismiss(intent); XCTFail("Expected changed host") } catch CompanionError.changedHost { }
+        XCTAssertEqual(writes, 2)
+    }
+
+    private func discoveryFixture(host: String = "host", instance: String = "instance") throws -> Data {
+        try JSONSerialization.data(withJSONObject: ["protocolVersion": 1, "hostIdentity": host, "hostInstanceId": instance,
+            "capabilities": ["observations": ["version": 1, "sessions": "/api/sessions?view=observation",
+                "attention": "/api/attention", "activity": "/api/activity", "identity": true, "dismissals": ["version": 1, "action": "presentation.dismiss"]]]])
+    }
+    private func collectionFixture(_ ids: [String] = [], cursor: String? = nil, revision: String = "r1", attention: Bool = false) throws -> Data {
+        let rows: [[String: Any]] = ids.map { id in
+            if attention { return ["id": id, "fingerprint": "f-" + id, "kind": "completion",
+                "target": ["type": "session", "sessionId": id], "requiresAction": false, "read": false,
+                "title": "Example", "summary": "Response ready", "agentCreated": false,
+                "dismissal": ["id": "notice-" + id, "fingerprint": "f-" + id, "dismissed": false]] }
+            return ["id": id, "title": "Example", "status": "working", "pinned": true,
+                "activity": ["execution": true, "preparing": false, "loading": false],
+                "dismissal": ["id": "work-" + id, "fingerprint": "w-" + id, "dismissed": false]]
+        }
+        return try JSONSerialization.data(withJSONObject: ["hostIdentity": "host", "hostInstanceId": "instance", "revision": revision, "items": rows, "nextCursor": cursor as Any? ?? NSNull()])
+    }
+    private func activityFixture(cursor: String? = nil) throws -> Data {
+        var value: [String: Any] = ["hostIdentity": "host", "hostInstanceId": "instance", "revision": "a1", "status": cursor == nil ? "ready" : "collecting", "nextCursor": cursor as Any? ?? NSNull()]
+        if cursor == nil { value.merge(["executionCount": 2, "preparingCount": 0, "loadingCount": 0, "attentionCount": 1, "requiresActionCount": 0]) { _, new in new } }
         return try JSONSerialization.data(withJSONObject: value)
     }
     private func observationClient() throws -> HostClient {
         let config = URLSessionConfiguration.ephemeral; config.protocolClasses = [StubURLProtocol.self]
         return HostClient(endpoint: try Endpoint("https://host"), token: "test", clientID: "test", configuration: config)
     }
-    func testPendingActivityFollowsCursorBeforeRetryingRead() async throws {
-        var step = 0
+    func testIndependentGenericCollectionsAndIncrementalCounts() async throws {
+        var paths: [String] = []
         StubURLProtocol.handler = { request in
-            defer { step += 1 }
-            XCTAssertEqual(request.httpMethod, "GET")
-            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer test")
-            let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
-            switch step {
-            case 0:
-                XCTAssertEqual(request.url!.path, "/api/companion")
-                return (503, Data("{\"code\":\"observation_pending\"}".utf8))
-            case 1:
-                XCTAssertEqual(request.url!.path, "/api/activity"); XCTAssertTrue(query.isEmpty)
-                return (200, Data("{\"status\":\"collecting\",\"nextCursor\":\"a+/=\"}".utf8))
-            case 2:
-                XCTAssertEqual(query.first?.value, "a+/=")
-                return (200, Data("{\"status\":\"ready\"}".utf8))
-            default:
-                XCTAssertEqual(request.url!.path, "/api/companion")
-                return (200, try self.observationFixture())
+            let path = request.url!.path; paths.append(path)
+            let query = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)!.queryItems ?? []
+            let cursor = query.first { $0.name == "cursor" }?.value
+            if path == "/api/clients/attach" { return (200, try self.discoveryFixture()) }
+            XCTAssertEqual(query.first { $0.name == "scope" }?.value, "roots")
+            if path == "/api/sessions" {
+                XCTAssertEqual(query.first { $0.name == "view" }?.value, "observation")
+                return (200, try self.collectionFixture(cursor == nil ? [] : ["A", "B"], cursor: cursor == nil ? "s1" : nil))
             }
+            if path == "/api/attention" { return (200, try self.collectionFixture(["B"], attention: true)) }
+            XCTAssertEqual(path, "/api/activity")
+            return (cursor == nil ? 202 : 200, try self.activityFixture(cursor: cursor == nil ? "a1" : nil))
         }
         defer { StubURLProtocol.handler = nil }
         let result = try await observationClient().snapshot()
-        XCTAssertEqual(result.items.count, 1); XCTAssertEqual(step, 4)
-    }
-    func testUnequalPageCountsRetainTerminalCursorAndDoNotDuplicateItems() async throws {
-        var step = 0
-        StubURLProtocol.handler = { request in
-            defer { step += 1 }
-            let query = Dictionary(uniqueKeysWithValues: (URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []).map { ($0.name, $0.value!) })
-            switch step {
-            case 0: return (200, try self.observationFixture(sessionCursor: "s1", itemCursor: "i1"))
-            case 1:
-                XCTAssertEqual(query, ["sessionsCursor": "s1", "itemsCursor": "i1"])
-                return (200, try self.observationFixture(session: "B", item: "B", sessionCursor: "s2"))
-            default:
-                XCTAssertEqual(query, ["sessionsCursor": "s2", "itemsCursor": "i1"])
-                return (200, try self.observationFixture(session: "C", item: "B"))
-            }
-        }
-        defer { StubURLProtocol.handler = nil }
-        let result = try await observationClient().snapshot()
-        XCTAssertEqual(result.sessions.map(\.id), ["A", "B", "C"])
-        XCTAssertEqual(result.items.map(\.id), ["A", "B"])
-        XCTAssertFalse(result.sessionsTruncated); XCTAssertFalse(result.itemsTruncated)
-        XCTAssertNil(result.sessionsNextCursor); XCTAssertNil(result.itemsNextCursor)
-        XCTAssertEqual(step, 3)
+        XCTAssertEqual(result.sessions.map(\.id), ["A", "B"])
+        XCTAssertEqual(result.items.map(\.sessionId), ["B"])
+        XCTAssertTrue(result.items[0].pinned)
+        XCTAssertEqual(result.workingCount, 2)
+        XCTAssertEqual(paths, ["/api/clients/attach", "/api/sessions", "/api/sessions", "/api/attention", "/api/activity", "/api/activity"])
     }
     func testExpiredTraversalDiscardsPartialBaselineAndStartsAgain() async throws {
         var step = 0
         StubURLProtocol.handler = { request in
-            defer { step += 1 }
-            if step == 0 { return (200, try self.observationFixture(sessionCursor: "expired")) }
-            if step == 1 { return (409, Data("{}".utf8)) }
-            XCTAssertTrue(URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?.isEmpty ?? true)
-            return (200, try self.observationFixture(session: "fresh", item: "fresh"))
+            switch request.url!.path {
+            case "/api/clients/attach": return (200, try self.discoveryFixture())
+            case "/api/sessions":
+                defer { step += 1 }
+                if step == 0 { return (200, try self.collectionFixture(["stale"], cursor: "expired")) }
+                if step == 1 { return (409, Data("{}".utf8)) }
+                return (200, try self.collectionFixture(["fresh"]))
+            case "/api/attention": return (200, try self.collectionFixture(["fresh"], attention: true))
+            default: return (200, try self.activityFixture())
+            }
         }
         defer { StubURLProtocol.handler = nil }
         let result = try await observationClient().snapshot()
         XCTAssertEqual(result.sessions.map(\.id), ["fresh"]); XCTAssertEqual(result.items.map(\.id), ["fresh"])
         XCTAssertEqual(step, 3)
     }
-    func testUnrelated503IsNotRetriedAsActivityCollection() async throws {
-        var requests = 0
-        StubURLProtocol.handler = { _ in requests += 1; return (503, Data("{\"code\":\"busy\"}".utf8)) }
-        defer { StubURLProtocol.handler = nil }
-        do { _ = try await observationClient().snapshot(); XCTFail("Accepted a failed snapshot") }
-        catch CompanionError.rejected(503) { }
-        XCTAssertEqual(requests, 1)
+    func testGenericReadDenialNeverFallsBackOrBroadensAuthority() async throws {
+        for status in [401, 403, 404, 503] {
+            var paths: [String] = []
+            StubURLProtocol.handler = { request in
+                paths.append(request.url!.path)
+                if request.url!.path == "/api/clients/attach" { return (200, try self.discoveryFixture()) }
+                return (status, Data("{}".utf8))
+            }
+            do { _ = try await observationClient().snapshot(); XCTFail("Accepted denied observation") } catch { }
+            XCTAssertEqual(paths, ["/api/clients/attach", "/api/sessions"])
+        }
+        StubURLProtocol.handler = nil
+    }
+    func testDuplicateMixedRevisionAndRepeatedCursorCannotPublishPartialBaseline() async throws {
+        for fault in ["duplicate", "revision", "cursor"] {
+            var count = 0
+            StubURLProtocol.handler = { request in
+                if request.url!.path == "/api/clients/attach" { return (200, try self.discoveryFixture()) }
+                XCTAssertEqual(request.url!.path, "/api/sessions")
+                count += 1
+                return (200, try self.collectionFixture([fault == "duplicate" ? "A" : String(count)],
+                    cursor: count == 1 || fault == "cursor" ? "same" : nil,
+                    revision: count > 1 && fault == "revision" ? "r2" : "r1"))
+            }
+            do { _ = try await observationClient().snapshot(); XCTFail("Accepted corrupt traversal") } catch { }
+            XCTAssertEqual(count, 2)
+        }
+        StubURLProtocol.handler = nil
     }
     func testRepeatedActivityCursorStopsInsteadOfLooping() async throws {
-        var requests = 0
+        var count = 0
         StubURLProtocol.handler = { request in
-            requests += 1
-            if request.url!.path == "/api/companion" { return (503, Data("{\"code\":\"observation_pending\"}".utf8)) }
-            return (200, Data("{\"status\":\"collecting\",\"nextCursor\":\"same\"}".utf8))
+            switch request.url!.path {
+            case "/api/clients/attach": return (200, try self.discoveryFixture())
+            case "/api/sessions", "/api/attention": return (200, try self.collectionFixture())
+            default: count += 1; return (202, try self.activityFixture(cursor: "same"))
+            }
         }
         defer { StubURLProtocol.handler = nil }
-        do { _ = try await observationClient().snapshot(); XCTFail("Accepted a looping cursor") }
-        catch CompanionError.observationPending { }
-        XCTAssertEqual(requests, 3)
+        do { _ = try await observationClient().snapshot(); XCTFail("Accepted looping counts") } catch { }
+        XCTAssertEqual(count, 2)
     }
-    func testHostReplacementDuringPaginationIsRejected() async throws {
-        var requests = 0
-        StubURLProtocol.handler = { _ in
-            requests += 1
-            return (200, try self.observationFixture(sessionCursor: requests == 1 ? "next" : nil,
-                                                    host: requests == 1 ? "host" : "replacement"))
+    func testHostReplacementBeforePublicationIsRejected() async throws {
+        var discovery = 0
+        StubURLProtocol.handler = { request in
+            switch request.url!.path {
+            case "/api/clients/attach": discovery += 1; return (200, try self.discoveryFixture(host: discovery == 1 ? "host" : "replacement"))
+            case "/api/sessions", "/api/attention":
+                let data = try self.collectionFixture()
+                return (200, Data(String(data: data, encoding: .utf8)!.replacingOccurrences(of: "\"host\"", with: "\"replacement\"").utf8))
+            default: return (200, try self.activityFixture())
+            }
         }
         defer { StubURLProtocol.handler = nil }
-        do { _ = try await observationClient().snapshot(); XCTFail("Combined two hosts") }
+        do { _ = try await observationClient().snapshot(); XCTFail("Published replacement host") }
         catch CompanionError.changedHost { }
-        XCTAssertEqual(requests, 2)
+        XCTAssertEqual(discovery, 1)
     }
     private func body(_ request: URLRequest) throws -> [String: Any] {
         var data = request.httpBody ?? Data()
