@@ -1,4 +1,19 @@
-# Amplifier for Mac 0.1.9
+# Amplifier for Mac 0.1.10
+
+Dismiss an update on one device and it disappears from your other connected
+clients too. New responses or changed work states can appear again. Dismissing
+only hides the update; it does not mark it read, answer a request or stop work.
+
+Tempo now uses the shared observation feeds for chat activity and attention.
+Existing saved connections are preserved. Each connected service must support
+versioned observation identity and shared dismissals (Unified 0.103.0 or later);
+unsupported services show an update requirement instead of using the old feed.
+
+Avatar appearance, sizing, visibility and grouping remain local preferences.
+Dismissal synchronization is scoped to the same account on each service; separate
+services do not share accounts or receipts.
+
+## Previous release: 0.1.9
 
 Change Tempo notification visibility directly from the avatar's right-click menu:
 **Always visible**, **On hover**, or **Hidden**. The checked choice stays in sync
