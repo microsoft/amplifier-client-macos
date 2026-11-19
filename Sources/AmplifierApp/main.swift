@@ -397,7 +397,8 @@ enum Keychain {
         let unread = attention.count
         let work = online.reduce(0) { $0 + ($1.latest?.workingCount ?? 0) }
         let unavailable = orderedConnections.filter { !$0.connected && !$0.registration.paused }.count
-        let detail = connected ? "\(unread) updates · \(work) working" + (unavailable > 0 ? " · \(unavailable) unavailable" : "") : "No services connected"
+        let bubbleCount = activityRows().count
+        let detail = connected ? "\(bubbleCount) chat\(bubbleCount == 1 ? "" : "s") · \(work) working" + (unavailable > 0 ? " · \(unavailable) unavailable" : "") : "No services connected"
         sprite.update(connected: connected, connecting: connecting, working: work, items: attention, scope: "services")
         menu.addItem(withTitle: detail, action: nil, keyEquivalent: "").isEnabled = false
         let compose = menu.addItem(withTitle: "New message…", action: #selector(newMessage), keyEquivalent: "n")
@@ -471,10 +472,10 @@ enum Keychain {
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Amplifier", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         item.menu = menu; sprite.setAccessibilityLabel("Amplifier: " + detail)
-        surface.updateStatus(connected: connected, working: work, unread: unread,
+        surface.updateStatus(connected: connected, working: work, unread: unread, visibleChats: bubbleCount,
                              error: attention.contains { $0.isError },
                              detail: detail)
-        surface.setActivityAvailable(connected && (unread > 0 || (defaults.bool(forKey: "workBubbles") && work > 0)))
+        surface.setActivityAvailable(connected && bubbleCount > 0)
         refreshBubbles()
         surface.setBubblesVisible(bubblesOpen)
     }
@@ -578,7 +579,7 @@ enum Keychain {
         guard connected else { showSettings(); return }
         noticeVisibility.toggle()
     }
-    /// Keep ongoing work visible without adding it to the attention count.
+    /// Build the list from visible notice and work occurrences on each service.
     private func activityRows() -> [TempoBubbles.Row] {
         var all: [TempoBubbles.Row] = []; bubbleTargets = [:]
         for state in online {
@@ -589,27 +590,29 @@ enum Keychain {
                 let target = ServiceTarget(service: state.registration, hostIdentity: latest.hostIdentity, sessionID: id)
                 bubbleTargets[target.key] = target; return target.key
             }
-            let items = latest.items.filter { $0.read != true && included($0, state: state) }
-            var rows = items.map { item in
-                let session = latest.sessions.first { $0.id == item.sessionId }
-                let status = NoticeStatus.attention(kind: item.kind, working: session?.isWorking == true)
-                let detail = status == .working ? "Unread · " + (state.workLabels[item.sessionId]?.text ?? WorkPreview.fallback(status: session?.status ?? "working")) : state.previews[item.key] ?? item.summary
-                return TempoBubbles.Row(key: prefix + item.key, title: item.title, detail: label + detail, sessionID: route(item.sessionId), status: status, dismissalState: item.key, sharedDismissal: item.dismissal,
-                    serviceID: state.registration.id, serviceName: serviceTitle(state), priority: .attention(status))
+            func visible(_ descriptor: DismissalDescriptor?) -> Bool {
+                descriptor.map { !dismissals.hidden($0, service: state.registration) } ?? true
             }
-            let noticed = Set(items.map(\.sessionId))
-            if defaults.bool(forKey: "workBubbles") {
-                rows += latest.sessions.filter { $0.isWorking && !noticed.contains($0.id) }.map {
-                    TempoBubbles.Row(key: prefix + "work:" + $0.id, title: $0.title,
-                        detail: label + ($0.display?.summary ?? state.workLabels[$0.id]?.text ?? WorkPreview.fallback(status: $0.status)),
-                        sessionID: route($0.id), status: .working,
-                        dismissalState: $0.dismissal?.fingerprint ?? "", sharedDismissal: $0.dismissal,
-                        serviceID: state.registration.id, serviceName: serviceTitle(state), priority: .working)
+            let items = latest.items.filter { $0.read != true && included($0, state: state) && visible($0.dismissal) }
+            let work = latest.sessions.filter { defaults.bool(forKey: "workBubbles") && $0.isWorking && visible($0.dismissal) }
+            let sessions = Dictionary(uniqueKeysWithValues: latest.sessions.map { ($0.id, $0) })
+            for bubble in ChatBubble.group(items: items, work: work, sessions: sessions) {
+                let id = bubble.id, item = bubble.notice, session = sessions[id]
+                let current = bubble.current, unread = bubble.unread, status = bubble.status
+                let detail: String
+                if status == .working {
+                    detail = (unread ? "Unread · " : "") + (session?.display?.summary ?? state.workLabels[id]?.text ?? WorkPreview.fallback(status: session?.status ?? "working"))
+                } else if let current, status != .unread {
+                    detail = current.label + (unread ? " · Unread response" : "")
+                } else {
+                    detail = item.flatMap { state.previews[$0.key] ?? $0.summary } ?? "New response"
                 }
-            }
-            all += rows.filter { row in
-                guard let descriptor = row.sharedDismissal else { return true }
-                return !dismissals.hidden(descriptor, service: state.registration)
+                let descriptors = bubble.dismissals
+                all.append(TempoBubbles.Row(key: prefix + id, title: item?.title ?? session?.title ?? "Chat",
+                    detail: label + detail, sessionID: route(id), status: status,
+                    sharedDismissal: descriptors.first, visibleStates: descriptors,
+                    serviceID: state.registration.id, serviceName: serviceTitle(state),
+                    priority: item == nil ? .working : (current?.kind == "paused" ? .unread : .attention(status))))
             }
         }
         return NoticeOrdering.sorted(all, grouped: defaults.bool(forKey: "groupNoticesByService"), service: { $0.serviceID }, priority: { $0.priority })
@@ -645,22 +648,22 @@ enum Keychain {
             self.open(target)
         }
         bubbles.dismiss = { [weak self] row in
-            guard let self, let descriptor = row.sharedDismissal,
+            guard let self, !row.visibleStates.isEmpty,
                   let state = self.connections[row.serviceID], state.connected else { return }
             do {
                 var next = self.dismissals
-                _ = try next.enqueue(descriptor, service: state.registration)
+                for descriptor in row.visibleStates { _ = try next.enqueue(descriptor, service: state.registration) }
                 try next.save(to: self.dismissalURL); self.dismissals = next
-                self.refreshBubbles(); self.syncDismissals(state)
+                self.rebuildMenu(); self.syncDismissals(state)
             } catch { state.dismissalStatus = "Couldn't save dismissal — try again"; self.rebuildMenu() }
         }
-        let count = online.reduce(0) { count, state in count + (state.latest?.items.filter { included($0, state: state) }.count ?? 0) }
+
         // Re-sort on meaningful priority/group changes; rendering preserves the
         // reader's visible card and offset even when headers are inserted/removed.
         let headings = defaults.bool(forKey: "groupNoticesByService") &&
             (defaults.object(forKey: "showNoticeServiceHeadings") as? Bool ?? true) &&
             Set(rows.map(\.serviceID)).count > 1
-        bubbles.update(rows, anchor: panel, keepExisting: false, attentionCount: count, showServiceHeadings: headings)
+        bubbles.update(rows, anchor: panel, keepExisting: false, showServiceHeadings: headings)
         surface.setBubblesVisible(true)
     }
     private func requestVisibleDetails() {

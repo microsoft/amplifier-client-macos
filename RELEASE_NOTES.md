@@ -1,4 +1,12 @@
-# Amplifier for Mac 0.1.10
+# Amplifier for Mac 0.1.11
+
+Tempo shows one bubble per chat on each connected service. The count includes
+every chat in the list after your visibility settings and dismissals are applied.
+A service that shares sidebar status can show, for example, a paused chat with
+an unread response. Dismissing that bubble hides the updates it represents
+across your devices. New activity can bring it back.
+
+## Previous release: 0.1.10
 
 Dismiss an update on one device and it disappears from your other connected
 clients too. New responses or changed work states can appear again. Dismissing

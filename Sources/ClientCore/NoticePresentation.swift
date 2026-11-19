@@ -78,7 +78,7 @@ public struct NoticeListSize {
 }
 
 public enum NoticeStatus: String {
-    case working, unread, blocked, question, error, idle
+    case working, unread, blocked, waiting, question, error, idle
     public var symbol: String {
         switch self {
         case .working: return "arrow.clockwise" // Native view draws the sidebar's open progress ring.
@@ -86,6 +86,7 @@ public enum NoticeStatus: String {
         case .blocked: return "pause.circle"
         case .question: return "questionmark.circle"
         case .error: return "exclamationmark.circle"
+        case .waiting: return "clock"
         case .idle: return "bubble.left"
         }
     }
@@ -94,6 +95,47 @@ public enum NoticeStatus: String {
         if ["completion", "unread", "manual-unread"].contains(kind) { return working ? .working : .unread }
         if kind.contains("block") { return .blocked }
         return .question
+    }
+}
+
+/// Group only visible occurrences. Each service calls this separately.
+public struct ChatBubble {
+    public let id: String
+    public let notice: AttentionItem?
+    public let current: ChatStatus?
+    public let unread: Bool
+    public let status: NoticeStatus
+    public let dismissals: [DismissalDescriptor]
+
+    public static func group(items: [AttentionItem], work: [ChatSummary],
+                             sessions: [String: ChatSummary]) -> [ChatBubble] {
+        let notices = Dictionary(grouping: items, by: \.sessionId)
+        let active = Set(work.map(\.id))
+        var bubbles: [ChatBubble] = []
+        var seen = Set<String>()
+        for id in (items.map(\.sessionId) + work.map(\.id)) where seen.insert(id).inserted {
+            let group = notices[id] ?? []
+            let item = group.first(where: { $0.isError || $0.requiresAction == true }) ?? group.first
+            let session = sessions[id]
+            let current = item?.chatStatus ?? session?.chatStatus
+            let unread = group.contains { ["completion", "manual-unread"].contains($0.kind) }
+            let status: NoticeStatus
+            switch current?.kind {
+            case "attention":
+                status = ["Answer requested", "Approval requested", "Dependency decision requested"].contains(current?.label ?? "") ? .question : .error
+            case "working": status = .working
+            case "paused": status = .blocked
+            case "waiting": status = .waiting
+            case "unread": status = .unread
+            case "idle": status = .idle
+            default: status = item.map { NoticeStatus.attention(kind: $0.kind, working: session?.isWorking == true) } ?? .working
+            }
+            var descriptors = group.compactMap(\.dismissal)
+            if active.contains(id), let descriptor = session?.dismissal { descriptors.append(descriptor) }
+            bubbles.append(ChatBubble(id: id, notice: item, current: current, unread: unread,
+                                      status: status, dismissals: descriptors))
+        }
+        return bubbles
     }
 }
 

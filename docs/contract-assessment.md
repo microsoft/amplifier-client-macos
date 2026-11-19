@@ -198,3 +198,10 @@ state dismissals across approved clients. Qualification covers independent paged
 collections, restart/host identity, restricted-command denial, durable pending
 intent and stale state. Fixtures/builds are separate from signed release and
 physical adoption. No new browser/desktop execution authority is introduced.
+
+Tempo requests the optional sidebar chat status from both generic observation
+collections when the service advertises it. It groups visible occurrences by
+service and session, keeps unread separate from the current status, and counts
+the resulting chat bubbles including working chats. Dismissing a bubble records
+the displayed occurrences' exact fingerprints. Earlier v1 hosts retain the
+existing notice-based status until their service is updated.

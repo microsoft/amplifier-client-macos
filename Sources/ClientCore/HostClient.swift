@@ -33,6 +33,7 @@ public final class HostClient {
     private let transportLock = NSLock()
     private var observedHost: String?
     private var observedInstance: String?
+    private var supportsChatStatus = false
     private var resources: [String: String] = [:]
     private var closed = false
     public init(endpoint: Endpoint, token: String, clientID: String,
@@ -132,7 +133,7 @@ public final class HostClient {
         for (key, path) in expected {
             guard observations[key] as? String == path else { throw CompanionError.incompatibleHost }
         }
-        if cache { observedHost = host; observedInstance = instance; resources = expected }
+        if cache { supportsChatStatus = observations["chatStatus"] as? Bool == true; observedHost = host; observedInstance = instance; resources = expected }
         return (host, instance)
     }
     /// Each collection is coherent independently; never publish partial pages.
@@ -165,6 +166,7 @@ public final class HostClient {
         var query = parts.queryItems ?? []
         query.append(URLQueryItem(name: "scope", value: "roots"))
         if resource != "activity" { query.append(URLQueryItem(name: "limit", value: "200")) }
+        if resource != "activity" && supportsChatStatus { query.append(URLQueryItem(name: "chatStatus", value: "1")) }
         if resource == "sessions" { query.append(URLQueryItem(name: "activity", value: "active-or-pinned")) }
         if let cursor { query.append(URLQueryItem(name: "cursor", value: cursor)) }
         parts.queryItems = query
@@ -286,10 +288,11 @@ private struct ObservedNotice: Decodable, Identifiable {
     struct Target: Decodable { let type: String; let sessionId: String }
     let id: String; let fingerprint: String; let kind: String; let target: Target
     let requiresAction: Bool; let read: Bool; let title: String; let summary: String
+    let chatStatus: ChatStatus?
     let agentCreated: Bool?; let pinned: Bool?; let dismissal: DismissalDescriptor
     func item(pinned selected: Bool) -> AttentionItem {
         AttentionItem(id: id, fingerprint: fingerprint, sessionId: target.sessionId,
-            title: title, kind: kind, summary: summary, pinned: pinned ?? selected, agentCreated: agentCreated, dismissal: dismissal, requiresAction: requiresAction, read: read)
+            title: title, kind: kind, summary: summary, pinned: pinned ?? selected, agentCreated: agentCreated, chatStatus: chatStatus, dismissal: dismissal, requiresAction: requiresAction, read: read)
     }
 }
 private struct ActivityCounts: Decodable {
