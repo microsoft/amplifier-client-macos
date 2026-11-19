@@ -16,14 +16,14 @@ import ClientCore
         var status: NoticeStatus = .unread
         var dismissalState: String = ""
         var sharedDismissal: DismissalDescriptor? = nil
+        var visibleStates: [DismissalDescriptor] = []
         var serviceID: String = ""
         var serviceName: String = ""
         var priority: NoticePriority = .unread
     }
     let window: NoticePanel
     private var rows: [Row] = []
-    private var attentionCount = 0
-    private var summary: String { attentionCount > 0 ? "\(attentionCount) update\(attentionCount == 1 ? "" : "s")" : "Ongoing work" }
+    private var summary: String { "\(rows.count) chat\(rows.count == 1 ? "" : "s")" }
     private(set) var listExpanded = false
     var artworkFrame: (() -> NSRect?)?
     var openChat: ((String) -> Void)?
@@ -48,13 +48,11 @@ import ClientCore
         window.level = TempoWindows.input; window.hidesOnDeactivate = false
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
     }
-    func update(_ incoming: [Row], anchor: NSWindow, keepExisting: Bool, attentionCount: Int? = nil, showServiceHeadings: Bool = false) {
+    func update(_ incoming: [Row], anchor: NSWindow, keepExisting: Bool, showServiceHeadings: Bool = false) {
         guard !incoming.isEmpty else { close(); return }
         let previous = rows
-        let previousCount = self.attentionCount
         let headingsChanged = self.showServiceHeadings != showServiceHeadings
         self.showServiceHeadings = showServiceHeadings
-        self.attentionCount = max(0, attentionCount ?? incoming.count)
         // Retain ordering while reading, but remove notices that were reviewed.
         if keepExisting {
             let updates = Dictionary(uniqueKeysWithValues: incoming.map { ($0.key, $0) })
@@ -62,7 +60,7 @@ import ClientCore
             let keys = Set(rows.map(\.key)); rows += incoming.filter { !keys.contains($0.key) }
         } else { rows = incoming }
         window.anchor = anchor
-        if rows != previous || previousCount != self.attentionCount || headingsChanged || !window.isVisible { render() }
+        if rows != previous || headingsChanged || !window.isVisible { render() }
         window.anchor = anchor
         position(anchor)
         if !suppressedForSpace { window.orderFrontRegardless() }

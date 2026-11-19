@@ -54,9 +54,14 @@ public struct ChatSummary: Decodable, Identifiable {
     public let pinned: Bool
     public let agentCreated: Bool?
     public let activity: ActivityFlags?
+    public var chatStatus: ChatStatus? = nil
     public var dismissal: DismissalDescriptor? = nil
     public var display: DisplayHint? = nil
     public var isWorking: Bool { activity.map { $0.execution || $0.preparing } ?? ["working", "running", "stopping", "starting"].contains(status) }
+}
+public struct ChatStatus: Codable, Equatable {
+    public let kind: String
+    public let label: String
 }
 public struct DisplayHint: Decodable { public let summary: String }
 public struct ActivityFlags: Decodable {
@@ -73,6 +78,7 @@ public struct AttentionItem: Codable, Identifiable {
     public let summary: String
     public let pinned: Bool
     public let agentCreated: Bool?
+    public var chatStatus: ChatStatus? = nil
     public var dismissal: DismissalDescriptor? = nil
     public var requiresAction: Bool? = nil
     public var read: Bool? = nil

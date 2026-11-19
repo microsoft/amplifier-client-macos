@@ -143,7 +143,7 @@ MainActor.assumeIsolated {
     bubbles.close()
     precondition(!bubbles.window.isVisible && bubbles.window.anchor == nil)
     let many: [TempoBubbles.Row] = (0..<12).map { .init(key: "row-\($0)", title: "Chat \($0)", detail: "Response ready", sessionID: "chat-\($0)") }
-    bubbles.update(many, anchor: window, keepExisting: false, attentionCount: 11)
+    bubbles.update(many, anchor: window, keepExisting: false)
     precondition(!bubbles.listExpanded && bubbles.window.frame.height == 54, "Many notices start in a compact single-line stack")
     let front = bubbles.window.contentView!.subviews.compactMap { $0 as? TempoMaterial }.last!
     clickPadding(front)
@@ -160,7 +160,7 @@ MainActor.assumeIsolated {
     let header = bubbles.window.contentView!.subviews.compactMap { $0 as? TempoMaterial }.first!
     let collapseList = header.content.subviews.compactMap { $0 as? NoticeButton }.first!
     precondition(collapseList.acceptsFirstMouse(for: nil))
-    precondition(collapseList.title.hasPrefix("11 updates"), "Ongoing work must not increase attention counters")
+    precondition(collapseList.title.hasPrefix("12 chats"), "Header counts every listed chat")
     // Fades belong to the scrolling content, never its event-catching clip view
     // or fixed header. At a list end the complete edge must remain opaque.
     @MainActor func checkFade(_ y: CGFloat, lower: CGFloat, upper: CGFloat) {
@@ -252,13 +252,13 @@ MainActor.assumeIsolated {
     list.contentView.scroll(to: NSPoint(x: 0, y: 200)); list.reflectScrolledClipView(list.contentView)
     let beforeRefresh = list.documentVisibleRect
     let updated = many.map { row -> TempoBubbles.Row in var row = row; row.detail = "Thinking…"; return row }
-    bubbles.update(updated, anchor: window, keepExisting: false, attentionCount: 11)
+    bubbles.update(updated, anchor: window, keepExisting: false)
     let refreshed = bubbles.window.contentView!.subviews.compactMap { $0 as? NoticeScrollView }.first!
     precondition(abs(refreshed.documentVisibleRect.minY - beforeRefresh.minY) < 1, "Detail refresh preserves scroll")
     let refreshedStack = refreshed.documentView as! NSStackView
     let survivor = refreshedStack.arrangedSubviews[6]
     let offset = survivor.frame.maxY - refreshed.documentVisibleRect.maxY
-    bubbles.update(Array(updated.dropFirst(2)), anchor: window, keepExisting: true, attentionCount: 9)
+    bubbles.update(Array(updated.dropFirst(2)), anchor: window, keepExisting: true)
     let removed = bubbles.window.contentView!.subviews.compactMap { $0 as? NoticeScrollView }.first!
     let surviving = (removed.documentView as! NSStackView).arrangedSubviews[4]
     precondition(abs(surviving.frame.maxY - removed.documentVisibleRect.maxY - offset) < 1, "Removing earlier rows preserves the visible survivor")
@@ -269,12 +269,12 @@ MainActor.assumeIsolated {
     dismissButton.performClick(nil)
     precondition(dismissed == "row-2", "Dismiss addresses the current row")
     bubbles.availableHeightOverride = 700
-    bubbles.update(Array(updated.prefix(2)), anchor: window, keepExisting: true, attentionCount: 1)
+    bubbles.update(Array(updated.prefix(2)), anchor: window, keepExisting: true)
     bubbles.resizeList(to: 2000)
     precondition(bubbles.fitsContents && bubbles.listHeight == 116, "Cannot drag past all contents")
     let fitted = bubbles.window.contentView!.subviews.compactMap { $0 as? NoticeScrollView }.first!
     precondition(fitted.documentView?.layer?.mask == nil, "Fit-all contents must be completely unfaded")
-    bubbles.update(updated, anchor: window, keepExisting: true, attentionCount: 11)
+    bubbles.update(updated, anchor: window, keepExisting: true)
     precondition(bubbles.listHeight == 700, "Fit-all grows until the screen bound")
     bubbles.update(Array(updated.prefix(2)), anchor: window, keepExisting: true)
     precondition(bubbles.listHeight == 116, "Fit-all shrinks with contents")
@@ -300,12 +300,12 @@ MainActor.assumeIsolated {
     collapseList.performClick(nil)
     precondition(!bubbles.listExpanded && bubbles.window.frame.height == 54)
     bubbles.close()
-    bubbles.update(Array(many.prefix(2)), anchor: window, keepExisting: false, attentionCount: 0)
+    bubbles.update(Array(many.prefix(2)), anchor: window, keepExisting: false)
     let workingFront = bubbles.window.contentView!.subviews.compactMap { $0 as? TempoMaterial }.last!
     let workingTitle = (workingFront.content.subviews.first as! NSButton).attributedTitle.string
-    precondition(workingTitle.hasPrefix("Ongoing work"), "Work alone must not be labeled unread updates")
+    precondition(workingTitle.hasPrefix("2 chats"), "Working chats are included in the visible list count")
     bubbles.close()
-    print("PASS: twelve rows, eleven attention items, work-only labeling, stack, bounded scroll and collapse")
+    print("PASS: twelve chat rows, work-only count, stack, bounded scroll and collapse")
     surface.setBubblesVisible(true)
     precondition(surface.activityButton.toolTip == "Hide updates")
     surface.setBubblesVisible(false)

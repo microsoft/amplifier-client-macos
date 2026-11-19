@@ -1,6 +1,21 @@
 import XCTest
 @testable import ClientCore
 final class NoticePresentationTests: XCTestCase {
+    func testMultipleVisibleOccurrencesUseOneSidebarState() throws {
+        let wire = #"""
+        [{"id":"a","fingerprint":"1","sessionId":"s","title":"Chat","kind":"completion","summary":"Ready","pinned":false,
+          "chatStatus":{"kind":"paused","label":"Paused"},"dismissal":{"id":"a","fingerprint":"1","dismissed":false}},
+         {"id":"b","fingerprint":"2","sessionId":"s","title":"Chat","kind":"session-error","summary":"Issue","pinned":false,
+          "chatStatus":{"kind":"paused","label":"Paused"},"dismissal":{"id":"b","fingerprint":"2","dismissed":false}}]
+        """#
+        let items = try JSONDecoder().decode([AttentionItem].self, from: Data(wire.utf8))
+        let groups = ChatBubble.group(items: items, work: [], sessions: [:])
+        XCTAssertEqual(groups.count, 1)
+        XCTAssertEqual(groups.first?.status, .blocked)
+        XCTAssertEqual(groups.first?.unread, true)
+        XCTAssertEqual(groups.first?.dismissals.map(\.id), ["a", "b"])
+    }
+
     func testNoticeVisibilityChoicesAndExplicitHoverDismissal() {
         var state = NoticeVisibilityState(mode: .visible)
         XCTAssertTrue(state.isVisible)

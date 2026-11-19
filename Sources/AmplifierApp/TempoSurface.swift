@@ -115,15 +115,15 @@ import CoreText
         activityButton.setAccessibilityLabel(visible ? "Hide updates" : "Show updates")
     }
 
-    func updateStatus(connected: Bool, working: Int, unread: Int, error: Bool = false, detail: String) {
-        let count = max(0, unread)
+    func updateStatus(connected: Bool, working: Int, unread: Int, visibleChats: Int? = nil, error: Bool = false, detail: String) {
+        let count = max(0, visibleChats ?? unread)
         setActivityAvailable(connected && (count > 0 || working > 0))
         badge.stringValue = String(count)
         let diameter = max(18, ceil(badge.glyphBounds.width) + 8)
         badge.frame = NSRect(x: 97 - diameter, y: 35 - diameter, width: diameter, height: diameter)
         badge.isHidden = count == 0 || !connected
-        activityButton.setAccessibilityLabel(connected ? "Activity, \(count) updates" : "Activity, disconnected")
-        activityButton.toolTip = connected ? (count > 0 ? "\(count) updates" : "View activity") : "Connection details"
+        activityButton.setAccessibilityLabel(connected ? "Activity, \(count) chat\(count == 1 ? "" : "s")" : "Activity, disconnected")
+        activityButton.toolTip = connected ? (count > 0 ? "\(count) chat\(count == 1 ? "" : "s")" : "View activity") : "Connection details"
         artwork.toolTip = detail
         // Only a small handle remains at rest; status text lives in tooltips,
         // accessibility, the activity card, and the menu bar.
@@ -132,7 +132,7 @@ import CoreText
         handle.needsDisplay = true
         handle.font = .systemFont(ofSize: 12, weight: .medium)
         handle.contentTintColor = !connected ? .systemOrange : (working > 0 ? .controlAccentColor : .secondaryLabelColor)
-        let meaning = !connected ? detail : (error ? "Error needs review" : (count > 0 ? "\(count) updates to review" : (working > 0 ? "Working" : "Idle")))
+        let meaning = !connected ? detail : (error ? "Error needs review" : (count > 0 ? "\(count) chat\(count == 1 ? "" : "s")" : (working > 0 ? "Working" : "Idle")))
         handle.toolTip = "\(meaning) · Show Tempo controls"
         handle.setAccessibilityLabel("\(meaning). Show Tempo controls")
     }
