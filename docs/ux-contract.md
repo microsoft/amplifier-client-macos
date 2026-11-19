@@ -51,14 +51,14 @@ For floating companion surfaces, retain a single coherent glass treatment for ea
 
 ## Attention and work
 
-The menu bar contains the Amplifier logo and an optional flat 10-point blue attention badge at the lower-right, never a number. Keep the logo a system-tinted template. Apple’s [menu-bar guidance](https://developer.apple.com/design/human-interface-guidelines/the-menu-bar) recommends adaptive symbols/icons but does not prescribe badge geometry; the marker follows neighboring status badges without a success checkmark. Work alone does not add that badge. Your chats and its rows distinguish updates, working, and simultaneous work plus updates with status symbols and descriptions. Exact attention counts remain inside the menu and companion; they do not count ongoing work. Animation supplements static meaning and stops for Reduce Motion, hidden or offline surfaces.
+The menu bar contains the Amplifier logo and an optional flat 10-point blue attention badge at the lower-right, never a number. Keep the logo a system-tinted template. Apple’s [menu-bar guidance](https://developer.apple.com/design/human-interface-guidelines/the-menu-bar) recommends adaptive symbols/icons but does not prescribe badge geometry; the marker follows neighboring status badges without a success checkmark. Work alone does not add that badge. Your chats and its rows distinguish updates, working, and simultaneous work plus updates with status symbols and descriptions. The expanded-list header counts distinct chats in the list, including work-only chats when enabled. It excludes headings and dismissed cards. Animation supplements static meaning and stops for Reduce Motion, hidden or offline surfaces.
 
 Unread state belongs to the host's canonical attention receipts, shared with the
 sidebar. A response clears after its latest content is actually visible in a focused
 chat; opening a link alone never acknowledges it. Tempo reconciles that feed on
 its next poll (normally within five seconds). The local delivery ledger only avoids
 repeating desktop notifications; it is not a separate unread list. A chat with both
-an update and ongoing work gets one update card; after review, ongoing work may
+an update and ongoing work gets one card showing its current sidebar status; after review, ongoing work may
 remain without an attention badge.
 
 Each expanded card has a direct dismiss control. Dismissal hides that card from

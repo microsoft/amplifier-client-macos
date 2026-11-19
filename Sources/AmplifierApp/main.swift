@@ -612,7 +612,7 @@ enum Keychain {
                     detail: label + detail, sessionID: route(id), status: status,
                     sharedDismissal: descriptors.first, visibleStates: descriptors,
                     serviceID: state.registration.id, serviceName: serviceTitle(state),
-                    priority: item == nil ? .working : .attention(status)))
+                    priority: item == nil ? .working : (current?.kind == "paused" ? .unread : .attention(status))))
             }
         }
         return NoticeOrdering.sorted(all, grouped: defaults.bool(forKey: "groupNoticesByService"), service: { $0.serviceID }, priority: { $0.priority })
